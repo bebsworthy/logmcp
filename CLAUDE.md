@@ -111,10 +111,7 @@ Used to indicate that I have answered the questions or issue raised in `open-que
 All the documentation for the project is available in ./documentation/ 
 
 - [project.spec.md - The overview of the project](./documentation/project.specs.md) **ALWAYS READ THIS FILE**
-- [frontend.spec.md - The technical specification for the frontend](./documentation/frontend.spec.md) **ALWAYS READ THIS FILE BEFORE WORKING ON THE FRONTEND**
-- [backend.spec.md - The technical specification for the backend](./documentation/backend.spec.md) **ALWAYS READ THIS FILE BEFORE WORKING ON THE BACKEND**
-
-
+  
 **Others files pattern**
  * `*.feat.md`: Technical specification about a specific feature (usually under development or preparation). **ALWAYS READ THIS FILE IF MENTIONNED IN THE CURRENT TASK or read as needed**
  * `*.spec.md`: Technical specification about a specific component other than the backend or the frontend (for example an external API or function) **ALWAYS READ THIS FILE IF MENTIONNED IN THE CURRENT TASK or read as needed**
