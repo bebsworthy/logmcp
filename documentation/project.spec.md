@@ -35,6 +35,7 @@ LogMCP is a Model Context Protocol (MCP) server that provides real-time log stre
 
 - **Language**: Go
 - **WebSocket Library**: gorilla/websocket
+- **MCP library**: mcp-go [documentation](./documentation/mcp-go.md), [example](mcp-go.main.go.example)
 - **Protocol**: JSON over WebSocket
 - **Buffer**: In-memory ring buffer (5 minutes or 5MB limit)
 

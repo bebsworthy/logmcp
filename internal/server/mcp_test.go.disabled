@@ -1,0 +1,809 @@
+package server
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/logmcp/logmcp/internal/protocol"
+)
+
+// TestMCPServer_NewMCPServer tests MCP server creation
+func TestMCPServer_NewMCPServer(t *testing.T) {
+	sm := NewSessionManagerWithConfig(time.Minute, time.Second)
+	defer sm.Close()
+	
+	wsServer := NewWebSocketServer(sm)
+	mcpServer := NewMCPServer(sm, wsServer)
+	
+	assert.NotNil(t, mcpServer)
+	assert.Equal(t, sm, mcpServer.sessionManager)
+	assert.Equal(t, wsServer, mcpServer.wsServer)
+	assert.NotNil(t, mcpServer.toolHandlers)
+	assert.Len(t, mcpServer.toolHandlers, 5) // 5 tools
+	
+	mcpServer.Stop()
+}
+
+// TestMCPServer_NewMCPServerWithIO tests MCP server creation with custom IO
+func TestMCPServer_NewMCPServerWithIO(t *testing.T) {
+	sm := NewSessionManagerWithConfig(time.Minute, time.Second)
+	defer sm.Close()
+	
+	wsServer := NewWebSocketServer(sm)
+	
+	stdin := &bytes.Buffer{}
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	
+	mcpServer := NewMCPServerWithIO(sm, wsServer, stdin, stdout, stderr)
+	
+	assert.NotNil(t, mcpServer)
+	assert.Equal(t, stdin, mcpServer.stdin)
+	assert.Equal(t, stdout, mcpServer.stdout)
+	assert.Equal(t, stderr, mcpServer.stderr)
+	
+	mcpServer.Stop()
+}
+
+// TestMCPServer_HandleInitialize tests the initialize method
+func TestMCPServer_HandleInitialize(t *testing.T) {
+	sm := NewSessionManagerWithConfig(time.Minute, time.Second)
+	defer sm.Close()
+	
+	wsServer := NewWebSocketServer(sm)
+	stdin := &bytes.Buffer{}
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	
+	mcpServer := NewMCPServerWithIO(sm, wsServer, stdin, stdout, stderr)
+	defer mcpServer.Stop()
+	
+	request := &MCPRequest{
+		JSONRPC: "2.0",
+		ID:      "test-init",
+		Method:  "initialize",
+		Params:  map[string]interface{}{},
+	}
+	
+	err := mcpServer.handleInitialize(request)
+	require.NoError(t, err)
+	
+	// Check response
+	output := stdout.String()
+	assert.Contains(t, output, "protocolVersion")
+	assert.Contains(t, output, "capabilities")
+	assert.Contains(t, output, "serverInfo")
+	assert.Contains(t, output, "logmcp")
+}
+
+// TestMCPServer_HandleToolsList tests the tools/list method
+func TestMCPServer_HandleToolsList(t *testing.T) {
+	sm := NewSessionManagerWithConfig(time.Minute, time.Second)
+	defer sm.Close()
+	
+	wsServer := NewWebSocketServer(sm)
+	stdin := &bytes.Buffer{}
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	
+	mcpServer := NewMCPServerWithIO(sm, wsServer, stdin, stdout, stderr)
+	defer mcpServer.Stop()
+	
+	request := &MCPRequest{
+		JSONRPC: "2.0",
+		ID:      "test-tools",
+		Method:  "tools/list",
+		Params:  map[string]interface{}{},
+	}
+	
+	err := mcpServer.handleToolsList(request)
+	require.NoError(t, err)
+	
+	// Check response contains tools
+	output := stdout.String()
+	assert.Contains(t, output, "list_sessions")
+	assert.Contains(t, output, "get_logs")
+	assert.Contains(t, output, "start_process")
+	assert.Contains(t, output, "control_process")
+	assert.Contains(t, output, "send_stdin")
+}
+
+// TestMCPServer_HandleListSessions tests the list_sessions tool
+func TestMCPServer_HandleListSessions(t *testing.T) {
+	sm := NewSessionManagerWithConfig(time.Minute, time.Second)
+	defer sm.Close()
+	
+	wsServer := NewWebSocketServer(sm)
+	mcpServer := NewMCPServer(sm, wsServer)
+	defer mcpServer.Stop()
+	
+	// Create test sessions
+	runArgs := RunArgs{Command: "echo test", Label: "test"}
+	session1, err := sm.CreateSession("test1", "echo test", "/tmp", []string{"process_control"}, ModeRun, runArgs)
+	require.NoError(t, err)
+	
+	forwardArgs := ForwardArgs{Source: "/var/log/test.log", Label: "test2"}
+	session2, err := sm.CreateSession("test2", "", "/tmp", []string{}, ModeForward, forwardArgs)
+	require.NoError(t, err)
+	
+	// Test list_sessions
+	result, err := mcpServer.handleListSessions(context.Background(), map[string]interface{}{})
+	require.NoError(t, err)
+	
+	response, ok := result.(*protocol.ListSessionsResponse)
+	require.True(t, ok)
+	assert.True(t, response.Success)
+	assert.Len(t, response.Data.Sessions, 2)
+	assert.Equal(t, 2, response.Meta.TotalCount)
+	
+	// Check session details
+	sessions := response.Data.Sessions
+	assert.Equal(t, session1.Label, sessions[0].Label)
+	assert.Equal(t, session2.Label, sessions[1].Label)
+}
+
+// TestMCPServer_HandleGetLogs tests the get_logs tool
+func TestMCPServer_HandleGetLogs(t *testing.T) {
+	sm := NewSessionManagerWithConfig(time.Minute, time.Second)
+	defer sm.Close()
+	
+	wsServer := NewWebSocketServer(sm)
+	mcpServer := NewMCPServer(sm, wsServer)
+	defer mcpServer.Stop()
+	
+	// Create test session with logs
+	runArgs := RunArgs{Command: "echo test", Label: "test"}
+	session, err := sm.CreateSession("test", "echo test", "/tmp", []string{}, ModeRun, runArgs)
+	require.NoError(t, err)
+	
+	// Add test logs
+	logMsg1 := protocol.NewLogMessage(session.ID, "test", "Hello World", protocol.StreamStdout, 1234)
+	logMsg2 := protocol.NewLogMessage(session.ID, "test", "Error occurred", protocol.StreamStderr, 1234)
+	session.LogBuffer.AddFromMessage(logMsg1)
+	session.LogBuffer.AddFromMessage(logMsg2)
+	
+	// Test get_logs
+	args := map[string]interface{}{
+		"labels": []interface{}{"test"},
+		"lines":  float64(10),
+		"stream": "both",
+	}
+	
+	result, err := mcpServer.handleGetLogs(context.Background(), args)
+	require.NoError(t, err)
+	
+	response, ok := result.(*protocol.GetLogsResponse)
+	require.True(t, ok)
+	assert.True(t, response.Success)
+	assert.Len(t, response.Data.Logs, 2)
+	assert.Equal(t, []string{"test"}, response.Meta.SessionsQueried)
+	assert.Empty(t, response.Meta.SessionsNotFound)
+	
+	// Check log content
+	logs := response.Data.Logs
+	assert.Equal(t, "Hello World", logs[0].Content)
+	assert.Equal(t, "Error occurred", logs[1].Content)
+}
+
+// TestMCPServer_HandleGetLogs_InvalidParams tests get_logs with invalid parameters
+func TestMCPServer_HandleGetLogs_InvalidParams(t *testing.T) {
+	sm := NewSessionManagerWithConfig(time.Minute, time.Second)
+	defer sm.Close()
+	
+	wsServer := NewWebSocketServer(sm)
+	mcpServer := NewMCPServer(sm, wsServer)
+	defer mcpServer.Stop()
+	
+	tests := []struct {
+		name        string
+		args        map[string]interface{}
+		expectedErr string
+	}{
+		{
+			name:        "missing labels",
+			args:        map[string]interface{}{},
+			expectedErr: "labels parameter is required",
+		},
+		{
+			name: "invalid labels type",
+			args: map[string]interface{}{
+				"labels": "not_an_array",
+			},
+			expectedErr: "labels must be an array",
+		},
+		{
+			name: "invalid label in array",
+			args: map[string]interface{}{
+				"labels": []interface{}{123},
+			},
+			expectedErr: "all labels must be strings",
+		},
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := mcpServer.handleGetLogs(context.Background(), tt.args)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.expectedErr)
+		})
+	}
+}
+
+// TestMCPServer_HandleGetLogs_WithFilters tests get_logs with various filters
+func TestMCPServer_HandleGetLogs_WithFilters(t *testing.T) {
+	sm := NewSessionManagerWithConfig(time.Minute, time.Second)
+	defer sm.Close()
+	
+	wsServer := NewWebSocketServer(sm)
+	mcpServer := NewMCPServer(sm, wsServer)
+	defer mcpServer.Stop()
+	
+	// Create test session with logs
+	runArgs := RunArgs{Command: "echo test", Label: "test"}
+	session, err := sm.CreateSession("test", "echo test", "/tmp", []string{}, ModeRun, runArgs)
+	require.NoError(t, err)
+	
+	// Add test logs
+	logMsg1 := protocol.NewLogMessage(session.ID, "test", "INFO: Application started", protocol.StreamStdout, 1234)
+	logMsg2 := protocol.NewLogMessage(session.ID, "test", "ERROR: Database connection failed", protocol.StreamStderr, 1234)
+	logMsg3 := protocol.NewLogMessage(session.ID, "test", "INFO: Processing request", protocol.StreamStdout, 1234)
+	session.LogBuffer.AddFromMessage(logMsg1)
+	session.LogBuffer.AddFromMessage(logMsg2)
+	session.LogBuffer.AddFromMessage(logMsg3)
+	
+	// Test with stream filter
+	args := map[string]interface{}{
+		"labels": []interface{}{"test"},
+		"stream": "stderr",
+	}
+	
+	result, err := mcpServer.handleGetLogs(context.Background(), args)
+	require.NoError(t, err)
+	
+	response, ok := result.(*protocol.GetLogsResponse)
+	require.True(t, ok)
+	assert.Len(t, response.Data.Logs, 1)
+	assert.Equal(t, "ERROR: Database connection failed", response.Data.Logs[0].Content)
+	assert.Equal(t, protocol.StreamStderr, response.Data.Logs[0].Stream)
+	
+	// Test with pattern filter
+	args = map[string]interface{}{
+		"labels": []interface{}{"test"},
+		"pattern": "INFO:.*",
+	}
+	
+	result, err = mcpServer.handleGetLogs(context.Background(), args)
+	require.NoError(t, err)
+	
+	response, ok = result.(*protocol.GetLogsResponse)
+	require.True(t, ok)
+	assert.Len(t, response.Data.Logs, 2)
+	for _, log := range response.Data.Logs {
+		assert.Contains(t, log.Content, "INFO:")
+	}
+}
+
+// TestMCPServer_HandleStartProcess tests the start_process tool
+func TestMCPServer_HandleStartProcess(t *testing.T) {
+	sm := NewSessionManagerWithConfig(time.Minute, time.Second)
+	defer sm.Close()
+	
+	wsServer := NewWebSocketServer(sm)
+	mcpServer := NewMCPServer(sm, wsServer)
+	defer mcpServer.Stop()
+	
+	// Test start_process with echo command (should work on most systems)
+	args := map[string]interface{}{
+		"command": "echo hello",
+		"label":   "test-echo",
+	}
+	
+	result, err := mcpServer.handleStartProcess(context.Background(), args)
+	require.NoError(t, err)
+	
+	response, ok := result.(*protocol.StartProcessResponse)
+	require.True(t, ok)
+	assert.True(t, response.Success)
+	assert.Contains(t, response.Data.Message, "Process started successfully")
+	assert.Equal(t, "test-echo", response.Data.Session.Label)
+	assert.Equal(t, protocol.StatusRunning, response.Data.Session.Status)
+	assert.NotNil(t, response.Data.Session.PID)
+	
+	// Wait a bit for process to complete
+	time.Sleep(100 * time.Millisecond)
+}
+
+// TestMCPServer_HandleStartProcess_InvalidParams tests start_process with invalid parameters
+func TestMCPServer_HandleStartProcess_InvalidParams(t *testing.T) {
+	sm := NewSessionManagerWithConfig(time.Minute, time.Second)
+	defer sm.Close()
+	
+	wsServer := NewWebSocketServer(sm)
+	mcpServer := NewMCPServer(sm, wsServer)
+	defer mcpServer.Stop()
+	
+	tests := []struct {
+		name        string
+		args        map[string]interface{}
+		expectedErr string
+	}{
+		{
+			name:        "missing command",
+			args:        map[string]interface{}{"label": "test"},
+			expectedErr: "command parameter is required",
+		},
+		{
+			name:        "missing label",
+			args:        map[string]interface{}{"command": "echo test"},
+			expectedErr: "label parameter is required",
+		},
+		{
+			name: "invalid command type",
+			args: map[string]interface{}{
+				"command": 123,
+				"label":   "test",
+			},
+			expectedErr: "command parameter is required",
+		},
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := mcpServer.handleStartProcess(context.Background(), tt.args)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.expectedErr)
+		})
+	}
+}
+
+// TestMCPServer_HandleControlProcess tests the control_process tool
+func TestMCPServer_HandleControlProcess(t *testing.T) {
+	sm := NewSessionManagerWithConfig(time.Minute, time.Second)
+	defer sm.Close()
+	
+	wsServer := NewWebSocketServer(sm)
+	mcpServer := NewMCPServer(sm, wsServer)
+	defer mcpServer.Stop()
+	
+	// Create a managed session first (simulated)
+	managedArgs := protocol.ManagedArgs{
+		Command:    "sleep 60",
+		Label:      "test-sleep",
+		WorkingDir: "/tmp",
+	}
+	session, err := sm.CreateSession("test-sleep", "sleep 60", "/tmp", []string{"process_control"}, ModeManaged, managedArgs)
+	require.NoError(t, err)
+	
+	// Simulate running process
+	session.PID = 12345
+	session.Status = protocol.StatusRunning
+	
+	// Test signal action
+	args := map[string]interface{}{
+		"label":  "test-sleep",
+		"action": "signal",
+		"signal": "SIGTERM",
+	}
+	
+	// Note: This will fail because there's no actual process with PID 12345
+	// But we can test parameter validation
+	_, err = mcpServer.handleControlProcess(context.Background(), args)
+	// Expect error due to no actual process, but parameter validation should pass
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no process associated with session")
+}
+
+// TestMCPServer_HandleControlProcess_InvalidParams tests control_process with invalid parameters
+func TestMCPServer_HandleControlProcess_InvalidParams(t *testing.T) {
+	sm := NewSessionManagerWithConfig(time.Minute, time.Second)
+	defer sm.Close()
+	
+	wsServer := NewWebSocketServer(sm)
+	mcpServer := NewMCPServer(sm, wsServer)
+	defer mcpServer.Stop()
+	
+	tests := []struct {
+		name        string
+		args        map[string]interface{}
+		expectedErr string
+	}{
+		{
+			name:        "missing label",
+			args:        map[string]interface{}{"action": "restart"},
+			expectedErr: "label parameter is required",
+		},
+		{
+			name:        "missing action",
+			args:        map[string]interface{}{"label": "test"},
+			expectedErr: "action parameter is required",
+		},
+		{
+			name: "signal action without signal",
+			args: map[string]interface{}{
+				"label":  "test",
+				"action": "signal",
+			},
+			expectedErr: "signal is required when action is signal",
+		},
+		{
+			name: "invalid signal",
+			args: map[string]interface{}{
+				"label":  "test",
+				"action": "signal",
+				"signal": "INVALID",
+			},
+			expectedErr: "invalid signal",
+		},
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := mcpServer.handleControlProcess(context.Background(), tt.args)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.expectedErr)
+		})
+	}
+}
+
+// TestMCPServer_HandleSendStdin tests the send_stdin tool
+func TestMCPServer_HandleSendStdin(t *testing.T) {
+	sm := NewSessionManagerWithConfig(time.Minute, time.Second)
+	defer sm.Close()
+	
+	wsServer := NewWebSocketServer(sm)
+	mcpServer := NewMCPServer(sm, wsServer)
+	defer mcpServer.Stop()
+	
+	// Create a managed session
+	managedArgs := protocol.ManagedArgs{
+		Command:    "cat",
+		Label:      "test-cat",
+		WorkingDir: "/tmp",
+	}
+	session, err := sm.CreateSession("test-cat", "cat", "/tmp", []string{"stdin"}, ModeManaged, managedArgs)
+	require.NoError(t, err)
+	
+	// Test send_stdin
+	args := map[string]interface{}{
+		"label": "test-cat",
+		"input": "hello world\n",
+	}
+	
+	result, err := mcpServer.handleSendStdin(context.Background(), args)
+	require.NoError(t, err)
+	
+	response, ok := result.(*protocol.SendStdinResponse)
+	require.True(t, ok)
+	assert.True(t, response.Success)
+	assert.Equal(t, 12, response.Data.BytesSent) // Length of "hello world\n"
+	assert.Contains(t, response.Data.Message, "Input sent")
+}
+
+// TestMCPServer_HandleSendStdin_InvalidParams tests send_stdin with invalid parameters
+func TestMCPServer_HandleSendStdin_InvalidParams(t *testing.T) {
+	sm := NewSessionManagerWithConfig(time.Minute, time.Second)
+	defer sm.Close()
+	
+	wsServer := NewWebSocketServer(sm)
+	mcpServer := NewMCPServer(sm, wsServer)
+	defer mcpServer.Stop()
+	
+	tests := []struct {
+		name        string
+		args        map[string]interface{}
+		expectedErr string
+	}{
+		{
+			name:        "missing label",
+			args:        map[string]interface{}{"input": "test"},
+			expectedErr: "label parameter is required",
+		},
+		{
+			name:        "missing input",
+			args:        map[string]interface{}{"label": "test"},
+			expectedErr: "input parameter is required",
+		},
+		{
+			name: "invalid label type",
+			args: map[string]interface{}{
+				"label": 123,
+				"input": "test",
+			},
+			expectedErr: "label parameter is required",
+		},
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := mcpServer.handleSendStdin(context.Background(), tt.args)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.expectedErr)
+		})
+	}
+}
+
+// TestMCPServer_ProcessMessage tests message processing
+func TestMCPServer_ProcessMessage(t *testing.T) {
+	sm := NewSessionManagerWithConfig(time.Minute, time.Second)
+	defer sm.Close()
+	
+	wsServer := NewWebSocketServer(sm)
+	stdin := &bytes.Buffer{}
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	
+	mcpServer := NewMCPServerWithIO(sm, wsServer, stdin, stdout, stderr)
+	defer mcpServer.Stop()
+	
+	// Test initialize message
+	initMsg := `{"jsonrpc":"2.0","id":"init","method":"initialize","params":{}}`
+	err := mcpServer.processMessage(initMsg)
+	require.NoError(t, err)
+	
+	output := stdout.String()
+	assert.Contains(t, output, "protocolVersion")
+	
+	// Clear output buffer
+	stdout.Reset()
+	
+	// Test tools/list message
+	toolsMsg := `{"jsonrpc":"2.0","id":"tools","method":"tools/list","params":{}}`
+	err = mcpServer.processMessage(toolsMsg)
+	require.NoError(t, err)
+	
+	output = stdout.String()
+	assert.Contains(t, output, "list_sessions")
+}
+
+// TestMCPServer_ProcessMessage_InvalidJSON tests processing invalid JSON
+func TestMCPServer_ProcessMessage_InvalidJSON(t *testing.T) {
+	sm := NewSessionManagerWithConfig(time.Minute, time.Second)
+	defer sm.Close()
+	
+	wsServer := NewWebSocketServer(sm)
+	stdin := &bytes.Buffer{}
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	
+	mcpServer := NewMCPServerWithIO(sm, wsServer, stdin, stdout, stderr)
+	defer mcpServer.Stop()
+	
+	// Test invalid JSON
+	err := mcpServer.processMessage(`{invalid json}`)
+	require.NoError(t, err) // processMessage doesn't return error, it sends error response
+	
+	output := stdout.String()
+	assert.Contains(t, output, "Parse error")
+}
+
+// TestMCPServer_FormatBytes tests the formatBytes helper function
+func TestMCPServer_FormatBytes(t *testing.T) {
+	tests := []struct {
+		bytes    int
+		expected string
+	}{
+		{0, "0B"},
+		{512, "512B"},
+		{1024, "1.0KB"},
+		{1536, "1.5KB"},
+		{1048576, "1.0MB"},
+		{1073741824, "1.0GB"},
+	}
+	
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%d_bytes", tt.bytes), func(t *testing.T) {
+			result := formatBytes(tt.bytes)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// TestMCPServer_Health tests health check methods
+func TestMCPServer_Health(t *testing.T) {
+	sm := NewSessionManagerWithConfig(time.Minute, time.Second)
+	defer sm.Close()
+	
+	wsServer := NewWebSocketServer(sm)
+	mcpServer := NewMCPServer(sm, wsServer)
+	defer mcpServer.Stop()
+	
+	// Test IsHealthy
+	assert.True(t, mcpServer.IsHealthy())
+	
+	// Test GetHealth
+	health := mcpServer.GetHealth()
+	assert.True(t, health.IsHealthy)
+	assert.Equal(t, 5, health.RegisteredTools)
+	assert.NotNil(t, health.SessionManagerStats)
+}
+
+// TestMCPServer_Integration tests full MCP integration flow
+func TestMCPServer_Integration(t *testing.T) {
+	sm := NewSessionManagerWithConfig(time.Minute, time.Second)
+	defer sm.Close()
+	
+	wsServer := NewWebSocketServer(sm)
+	
+	// Create pipes for communication
+	stdinRead, stdinWrite := io.Pipe()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	
+	mcpServer := NewMCPServerWithIO(sm, wsServer, stdinRead, stdout, stderr)
+	
+	// Start server in background
+	go func() {
+		mcpServer.Start()
+	}()
+	
+	// Send initialize message
+	initMsg := `{"jsonrpc":"2.0","id":"init","method":"initialize","params":{}}` + "\n"
+	_, err := stdinWrite.Write([]byte(initMsg))
+	require.NoError(t, err)
+	
+	// Wait for response
+	time.Sleep(100 * time.Millisecond)
+	
+	// Check initialize response
+	output := stdout.String()
+	assert.Contains(t, output, "protocolVersion")
+	
+	// Clear output
+	stdout.Reset()
+	
+	// Send tools/list message
+	toolsMsg := `{"jsonrpc":"2.0","id":"tools","method":"tools/list","params":{}}` + "\n"
+	_, err = stdinWrite.Write([]byte(toolsMsg))
+	require.NoError(t, err)
+	
+	// Wait for response
+	time.Sleep(100 * time.Millisecond)
+	
+	// Check tools response
+	output = stdout.String()
+	assert.Contains(t, output, "list_sessions")
+	assert.Contains(t, output, "get_logs")
+	
+	// Clean up
+	stdinWrite.Close()
+	mcpServer.Stop()
+}
+
+// TestMCPServer_ToolsCall_ListSessions tests calling list_sessions via tools/call
+func TestMCPServer_ToolsCall_ListSessions(t *testing.T) {
+	sm := NewSessionManagerWithConfig(time.Minute, time.Second)
+	defer sm.Close()
+	
+	wsServer := NewWebSocketServer(sm)
+	stdin := &bytes.Buffer{}
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	
+	mcpServer := NewMCPServerWithIO(sm, wsServer, stdin, stdout, stderr)
+	defer mcpServer.Stop()
+	
+	// Create a test session
+	runArgs := RunArgs{Command: "echo test", Label: "test"}
+	_, err := sm.CreateSession("test", "echo test", "/tmp", []string{}, ModeRun, runArgs)
+	require.NoError(t, err)
+	
+	// Call list_sessions tool
+	request := &MCPRequest{
+		JSONRPC: "2.0",
+		ID:      "call-1",
+		Method:  "tools/call",
+		Params: map[string]interface{}{
+			"name":      "list_sessions",
+			"arguments": map[string]interface{}{},
+		},
+	}
+	
+	err = mcpServer.handleToolsCall(request)
+	require.NoError(t, err)
+	
+	// Check response
+	output := stdout.String()
+	assert.Contains(t, output, "test")
+	assert.Contains(t, output, "total_count")
+	assert.Contains(t, output, "active_count")
+}
+
+// TestMCPServer_ErrorHandling tests error handling in tool calls
+func TestMCPServer_ErrorHandling(t *testing.T) {
+	sm := NewSessionManagerWithConfig(time.Minute, time.Second)
+	defer sm.Close()
+	
+	wsServer := NewWebSocketServer(sm)
+	stdin := &bytes.Buffer{}
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	
+	mcpServer := NewMCPServerWithIO(sm, wsServer, stdin, stdout, stderr)
+	defer mcpServer.Stop()
+	
+	// Test calling non-existent tool
+	request := &MCPRequest{
+		JSONRPC: "2.0",
+		ID:      "error-1",
+		Method:  "tools/call",
+		Params: map[string]interface{}{
+			"name":      "non_existent_tool",
+			"arguments": map[string]interface{}{},
+		},
+	}
+	
+	err := mcpServer.handleToolsCall(request)
+	require.NoError(t, err) // No error returned, error sent as response
+	
+	// Check error response
+	output := stdout.String()
+	assert.Contains(t, output, "Tool not found")
+	assert.Contains(t, output, "non_existent_tool")
+}
+
+// Benchmark tests
+
+// BenchmarkMCPServer_HandleListSessions benchmarks list_sessions performance
+func BenchmarkMCPServer_HandleListSessions(b *testing.B) {
+	sm := NewSessionManagerWithConfig(time.Minute, time.Second)
+	defer sm.Close()
+	
+	wsServer := NewWebSocketServer(sm)
+	mcpServer := NewMCPServer(sm, wsServer)
+	defer mcpServer.Stop()
+	
+	// Create multiple sessions
+	for i := 0; i < 100; i++ {
+		runArgs := RunArgs{Command: fmt.Sprintf("echo test%d", i), Label: fmt.Sprintf("test%d", i)}
+		_, err := sm.CreateSession(fmt.Sprintf("test%d", i), fmt.Sprintf("echo test%d", i), "/tmp", []string{}, ModeRun, runArgs)
+		require.NoError(b, err)
+	}
+	
+	b.ResetTimer()
+	
+	for i := 0; i < b.N; i++ {
+		_, err := mcpServer.handleListSessions(context.Background(), map[string]interface{}{})
+		require.NoError(b, err)
+	}
+}
+
+// BenchmarkMCPServer_HandleGetLogs benchmarks get_logs performance
+func BenchmarkMCPServer_HandleGetLogs(b *testing.B) {
+	sm := NewSessionManagerWithConfig(time.Minute, time.Second)
+	defer sm.Close()
+	
+	wsServer := NewWebSocketServer(sm)
+	mcpServer := NewMCPServer(sm, wsServer)
+	defer mcpServer.Stop()
+	
+	// Create session with many logs
+	runArgs := RunArgs{Command: "echo test", Label: "test"}
+	session, err := sm.CreateSession("test", "echo test", "/tmp", []string{}, ModeRun, runArgs)
+	require.NoError(b, err)
+	
+	// Add many log entries
+	for i := 0; i < 1000; i++ {
+		logMsg := protocol.NewLogMessage(session.ID, "test", fmt.Sprintf("Log entry %d", i), protocol.StreamStdout, 1234)
+		session.LogBuffer.AddFromMessage(logMsg)
+	}
+	
+	args := map[string]interface{}{
+		"labels": []interface{}{"test"},
+		"lines":  float64(100),
+	}
+	
+	b.ResetTimer()
+	
+	for i := 0; i < b.N; i++ {
+		_, err := mcpServer.handleGetLogs(context.Background(), args)
+		require.NoError(b, err)
+	}
+}

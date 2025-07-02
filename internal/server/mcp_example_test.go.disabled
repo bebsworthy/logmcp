@@ -1,0 +1,610 @@
+package server_test
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"strings"
+	"time"
+
+	"github.com/logmcp/logmcp/internal/protocol"
+	"github.com/logmcp/logmcp/internal/server"
+)
+
+// ExampleMCPServer_BasicUsage demonstrates basic MCP server usage
+func ExampleMCPServer_BasicUsage() {
+	// Create session manager and WebSocket server
+	sm := server.NewSessionManagerWithConfig(time.Minute, time.Second)
+	defer sm.Close()
+	
+	wsServer := server.NewWebSocketServer(sm)
+	
+	// Create MCP server with custom IO for demonstration
+	stdin := &bytes.Buffer{}
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	
+	mcpServer := server.NewMCPServerWithIO(sm, wsServer, stdin, stdout, stderr)
+	defer mcpServer.Stop()
+	
+	// Create some test sessions
+	runArgs := server.RunArgs{Command: "echo hello", Label: "test1"}
+	session1, _ := sm.CreateSession("test1", "echo hello", "/tmp", []string{"process_control"}, server.ModeRun, runArgs)
+	
+	forwardArgs := server.ForwardArgs{Source: "/var/log/test.log", Label: "test2"}
+	session2, _ := sm.CreateSession("test2", "", "/tmp", []string{}, server.ModeForward, forwardArgs)
+	
+	// Add some logs to the first session
+	logMsg1 := protocol.NewLogMessage(session1.ID, "test1", "Application started", protocol.StreamStdout, 1234)
+	logMsg2 := protocol.NewLogMessage(session1.ID, "test1", "Processing request", protocol.StreamStdout, 1234)
+	session1.LogBuffer.AddFromMessage(logMsg1)
+	session1.LogBuffer.AddFromMessage(logMsg2)
+	
+	// Call list_sessions tool
+	result, _ := mcpServer.HandleListSessions(context.Background(), map[string]interface{}{})
+	
+	// Print result (simplified for example)
+	if response, ok := result.(*protocol.ListSessionsResponse); ok {
+		fmt.Printf("Found %d sessions\n", response.Meta.TotalCount)
+		for _, session := range response.Data.Sessions {
+			fmt.Printf("- %s: %s (%s)\n", session.Label, session.Command, session.Status)
+		}
+	}
+	
+	// Call get_logs tool
+	logsResult, _ := mcpServer.HandleGetLogs(context.Background(), map[string]interface{}{
+		"labels": []interface{}{"test1"},
+		"lines":  float64(10),
+	})
+	
+	if logsResponse, ok := logsResult.(*protocol.GetLogsResponse); ok {
+		fmt.Printf("\nFound %d log entries:\n", len(logsResponse.Data.Logs))
+		for _, logEntry := range logsResponse.Data.Logs {
+			fmt.Printf("- [%s] %s: %s\n", logEntry.Stream, logEntry.Label, logEntry.Content)
+		}
+	}
+	
+	// Output:
+	// Found 2 sessions
+	// - test1: echo hello (running)
+	// - test2:  (running)
+	//
+	// Found 2 log entries:
+	// - [stdout] test1: Application started
+	// - [stdout] test1: Processing request
+}
+
+// ExampleMCPServer_ProcessManagement demonstrates process management via MCP
+func ExampleMCPServer_ProcessManagement() {
+	// Create session manager and WebSocket server
+	sm := server.NewSessionManagerWithConfig(time.Minute, time.Second)
+	defer sm.Close()
+	
+	wsServer := server.NewWebSocketServer(sm)
+	mcpServer := server.NewMCPServer(sm, wsServer)
+	defer mcpServer.Stop()
+	
+	// Start a new process via MCP
+	startResult, err := mcpServer.HandleStartProcess(context.Background(), map[string]interface{}{
+		"command":     "echo 'Hello World'",
+		"label":       "hello-process",
+		"working_dir": "/tmp",
+	})
+	
+	if err != nil {
+		log.Printf("Error starting process: %v", err)
+		return
+	}
+	
+	if response, ok := startResult.(*protocol.StartProcessResponse); ok {
+		fmt.Printf("Process started: %s\n", response.Data.Message)
+		fmt.Printf("Session label: %s\n", response.Data.Session.Label)
+		fmt.Printf("Process status: %s\n", response.Data.Session.Status)
+		if response.Data.Session.PID != nil {
+			fmt.Printf("Process PID: %d\n", *response.Data.Session.PID)
+		}
+	}
+	
+	// Wait a moment for process to complete
+	time.Sleep(100 * time.Millisecond)
+	
+	// Check logs from the process
+	logsResult, _ := mcpServer.HandleGetLogs(context.Background(), map[string]interface{}{
+		"labels": []interface{}{"hello-process"},
+	})
+	
+	if logsResponse, ok := logsResult.(*protocol.GetLogsResponse); ok {
+		fmt.Printf("\nProcess output (%d entries):\n", len(logsResponse.Data.Logs))
+		for _, logEntry := range logsResponse.Data.Logs {
+			fmt.Printf("- %s\n", logEntry.Content)
+		}
+	}
+	
+	// Example output (actual PID will vary):
+	// Process started: Process started successfully with PID 12345
+	// Session label: hello-process
+	// Process status: running
+	// Process PID: 12345
+	//
+	// Process output (1 entries):
+	// - Hello World
+}
+
+// ExampleMCPServer_LogFiltering demonstrates advanced log filtering
+func ExampleMCPServer_LogFiltering() {
+	// Create session manager and WebSocket server
+	sm := server.NewSessionManagerWithConfig(time.Minute, time.Second)
+	defer sm.Close()
+	
+	wsServer := server.NewWebSocketServer(sm)
+	mcpServer := server.NewMCPServer(sm, wsServer)
+	defer mcpServer.Stop()
+	
+	// Create a session with mixed logs
+	runArgs := server.RunArgs{Command: "test-app", Label: "app"}
+	session, _ := sm.CreateSession("app", "test-app", "/tmp", []string{}, server.ModeRun, runArgs)
+	
+	// Add various log entries
+	logs := []struct {
+		content string
+		stream  protocol.StreamType
+	}{
+		{"INFO: Application starting", protocol.StreamStdout},
+		{"ERROR: Database connection failed", protocol.StreamStderr},
+		{"INFO: Retrying database connection", protocol.StreamStdout},
+		{"WARNING: High memory usage detected", protocol.StreamStderr},
+		{"INFO: Database connection established", protocol.StreamStdout},
+		{"ERROR: Authentication failed for user", protocol.StreamStderr},
+		{"INFO: Processing user request", protocol.StreamStdout},
+	}
+	
+	for i, logData := range logs {
+		logMsg := protocol.NewLogMessage(session.ID, "app", logData.content, logData.stream, 1234+i)
+		session.LogBuffer.AddFromMessage(logMsg)
+	}
+	
+	// Filter by stream type - only errors
+	fmt.Println("=== ERROR LOGS ONLY ===")
+	errorResult, _ := mcpServer.HandleGetLogs(context.Background(), map[string]interface{}{
+		"labels": []interface{}{"app"},
+		"stream": "stderr",
+	})
+	
+	if response, ok := errorResult.(*protocol.GetLogsResponse); ok {
+		for _, logEntry := range response.Data.Logs {
+			fmt.Printf("[ERROR] %s\n", logEntry.Content)
+		}
+	}
+	
+	// Filter by pattern - only INFO messages
+	fmt.Println("\n=== INFO MESSAGES ONLY ===")
+	infoResult, _ := mcpServer.HandleGetLogs(context.Background(), map[string]interface{}{
+		"labels": []interface{}{"app"},
+		"pattern": "^INFO:",
+	})
+	
+	if response, ok := infoResult.(*protocol.GetLogsResponse); ok {
+		for _, logEntry := range response.Data.Logs {
+			fmt.Printf("[INFO] %s\n", logEntry.Content)
+		}
+	}
+	
+	// Filter by pattern - database related messages
+	fmt.Println("\n=== DATABASE RELATED LOGS ===")
+	dbResult, _ := mcpServer.HandleGetLogs(context.Background(), map[string]interface{}{
+		"labels": []interface{}{"app"},
+		"pattern": "(?i)database",
+	})
+	
+	if response, ok := dbResult.(*protocol.GetLogsResponse); ok {
+		for _, logEntry := range response.Data.Logs {
+			fmt.Printf("[%s] %s\n", strings.ToUpper(string(logEntry.Stream)), logEntry.Content)
+		}
+	}
+	
+	// Output:
+	// === ERROR LOGS ONLY ===
+	// [ERROR] ERROR: Database connection failed
+	// [ERROR] WARNING: High memory usage detected
+	// [ERROR] ERROR: Authentication failed for user
+	//
+	// === INFO MESSAGES ONLY ===
+	// [INFO] INFO: Application starting
+	// [INFO] INFO: Retrying database connection
+	// [INFO] INFO: Database connection established
+	// [INFO] INFO: Processing user request
+	//
+	// === DATABASE RELATED LOGS ===
+	// [STDERR] ERROR: Database connection failed
+	// [STDOUT] INFO: Retrying database connection
+	// [STDOUT] INFO: Database connection established
+}
+
+// ExampleMCPServer_MultiSessionLogs demonstrates querying logs from multiple sessions
+func ExampleMCPServer_MultiSessionLogs() {
+	// Create session manager and WebSocket server
+	sm := server.NewSessionManagerWithConfig(time.Minute, time.Second)
+	defer sm.Close()
+	
+	wsServer := server.NewWebSocketServer(sm)
+	mcpServer := server.NewMCPServer(sm, wsServer)
+	defer mcpServer.Stop()
+	
+	// Create multiple sessions
+	sessions := []struct {
+		label   string
+		command string
+		logs    []string
+	}{
+		{
+			label:   "frontend",
+			command: "npm run dev",
+			logs:    []string{"Frontend server starting", "Webpack compilation complete", "Server ready on port 3000"},
+		},
+		{
+			label:   "backend",
+			command: "npm run server",
+			logs:    []string{"Backend server starting", "Database connected", "API server listening on port 8080"},
+		},
+		{
+			label:   "database",
+			command: "postgres",
+			logs:    []string{"PostgreSQL starting", "Database system ready", "Accepting connections"},
+		},
+	}
+	
+	// Create sessions and add logs
+	for _, sessionData := range sessions {
+		runArgs := server.RunArgs{Command: sessionData.command, Label: sessionData.label}
+		session, _ := sm.CreateSession(sessionData.label, sessionData.command, "/tmp", []string{}, server.ModeRun, runArgs)
+		
+		for i, logContent := range sessionData.logs {
+			logMsg := protocol.NewLogMessage(session.ID, sessionData.label, logContent, protocol.StreamStdout, 1000+i)
+			session.LogBuffer.AddFromMessage(logMsg)
+			// Add small delay to ensure different timestamps
+			time.Sleep(time.Millisecond)
+		}
+	}
+	
+	// Query logs from all sessions
+	fmt.Println("=== ALL SESSIONS ===")
+	allResult, _ := mcpServer.HandleGetLogs(context.Background(), map[string]interface{}{
+		"labels": []interface{}{"frontend", "backend", "database"},
+		"lines":  float64(20),
+	})
+	
+	if response, ok := allResult.(*protocol.GetLogsResponse); ok {
+		fmt.Printf("Total logs: %d\n", len(response.Data.Logs))
+		fmt.Printf("Sessions queried: %v\n", response.Meta.SessionsQueried)
+		fmt.Printf("Sessions not found: %v\n", response.Meta.SessionsNotFound)
+		
+		fmt.Println("\nCombined logs (chronological order):")
+		for _, logEntry := range response.Data.Logs {
+			fmt.Printf("[%s] %s\n", logEntry.Label, logEntry.Content)
+		}
+	}
+	
+	// Query logs from specific sessions
+	fmt.Println("\n=== BACKEND AND DATABASE ONLY ===")
+	backendResult, _ := mcpServer.HandleGetLogs(context.Background(), map[string]interface{}{
+		"labels": []interface{}{"backend", "database"},
+	})
+	
+	if response, ok := backendResult.(*protocol.GetLogsResponse); ok {
+		for _, logEntry := range response.Data.Logs {
+			fmt.Printf("[%s] %s\n", logEntry.Label, logEntry.Content)
+		}
+	}
+	
+	// Try querying non-existent session
+	fmt.Println("\n=== WITH NON-EXISTENT SESSION ===")
+	mixedResult, _ := mcpServer.HandleGetLogs(context.Background(), map[string]interface{}{
+		"labels": []interface{}{"frontend", "nonexistent"},
+	})
+	
+	if response, ok := mixedResult.(*protocol.GetLogsResponse); ok {
+		fmt.Printf("Sessions queried: %v\n", response.Meta.SessionsQueried)
+		fmt.Printf("Sessions not found: %v\n", response.Meta.SessionsNotFound)
+		fmt.Printf("Logs found: %d\n", len(response.Data.Logs))
+	}
+	
+	// Output:
+	// === ALL SESSIONS ===
+	// Total logs: 9
+	// Sessions queried: [frontend backend database]
+	// Sessions not found: []
+	//
+	// Combined logs (chronological order):
+	// [frontend] Frontend server starting
+	// [frontend] Webpack compilation complete
+	// [frontend] Server ready on port 3000
+	// [backend] Backend server starting
+	// [backend] Database connected
+	// [backend] API server listening on port 8080
+	// [database] PostgreSQL starting
+	// [database] Database system ready
+	// [database] Accepting connections
+	//
+	// === BACKEND AND DATABASE ONLY ===
+	// [backend] Backend server starting
+	// [backend] Database connected
+	// [backend] API server listening on port 8080
+	// [database] PostgreSQL starting
+	// [database] Database system ready
+	// [database] Accepting connections
+	//
+	// === WITH NON-EXISTENT SESSION ===
+	// Sessions queried: [frontend]
+	// Sessions not found: [nonexistent]
+	// Logs found: 3
+}
+
+// ExampleMCPServer_StdinInteraction demonstrates stdin interaction with processes
+func ExampleMCPServer_StdinInteraction() {
+	// Create session manager and WebSocket server
+	sm := server.NewSessionManagerWithConfig(time.Minute, time.Second)
+	defer sm.Close()
+	
+	wsServer := server.NewWebSocketServer(sm)
+	mcpServer := server.NewMCPServer(sm, wsServer)
+	defer mcpServer.Stop()
+	
+	// Create an interactive session (simulated)
+	managedArgs := protocol.ManagedArgs{
+		Command:    "cat",
+		Label:      "interactive-cat",
+		WorkingDir: "/tmp",
+	}
+	session, _ := sm.CreateSession("interactive-cat", "cat", "/tmp", []string{"stdin"}, server.ModeManaged, managedArgs)
+	
+	// Send input to the process
+	fmt.Println("=== SENDING INPUT TO PROCESS ===")
+	
+	inputs := []string{
+		"Hello, World!",
+		"This is a test",
+		"Multiple lines of input",
+	}
+	
+	for _, input := range inputs {
+		result, err := mcpServer.HandleSendStdin(context.Background(), map[string]interface{}{
+			"label": "interactive-cat",
+			"input": input + "\n",
+		})
+		
+		if err != nil {
+			fmt.Printf("Error sending input: %v\n", err)
+			continue
+		}
+		
+		if response, ok := result.(*protocol.SendStdinResponse); ok {
+			fmt.Printf("Sent: %s (%d bytes)\n", input, response.Data.BytesSent)
+		}
+	}
+	
+	// In a real scenario, you would see the output in the logs
+	fmt.Println("\n=== PROCESS OUTPUT (simulated) ===")
+	for _, input := range inputs {
+		fmt.Printf("cat echoed: %s\n", input)
+	}
+	
+	// Output:
+	// === SENDING INPUT TO PROCESS ===
+	// Sent: Hello, World! (14 bytes)
+	// Sent: This is a test (15 bytes)
+	// Sent: Multiple lines of input (25 bytes)
+	//
+	// === PROCESS OUTPUT (simulated) ===
+	// cat echoed: Hello, World!
+	// cat echoed: This is a test
+	// cat echoed: Multiple lines of input
+}
+
+// ExampleMCPServer_ErrorHandling demonstrates error handling in MCP operations
+func ExampleMCPServer_ErrorHandling() {
+	// Create session manager and WebSocket server
+	sm := server.NewSessionManagerWithConfig(time.Minute, time.Second)
+	defer sm.Close()
+	
+	wsServer := server.NewWebSocketServer(sm)
+	mcpServer := server.NewMCPServer(sm, wsServer)
+	defer mcpServer.Stop()
+	
+	// Try to get logs from non-existent session
+	fmt.Println("=== NON-EXISTENT SESSION ===")
+	result, _ := mcpServer.HandleGetLogs(context.Background(), map[string]interface{}{
+		"labels": []interface{}{"nonexistent"},
+	})
+	
+	if response, ok := result.(*protocol.GetLogsResponse); ok {
+		fmt.Printf("Sessions queried: %v\n", response.Meta.SessionsQueried)
+		fmt.Printf("Sessions not found: %v\n", response.Meta.SessionsNotFound)
+		fmt.Printf("Total results: %d\n", response.Meta.TotalResults)
+	}
+	
+	// Try invalid parameters for get_logs
+	fmt.Println("\n=== INVALID PARAMETERS ===")
+	_, err := mcpServer.HandleGetLogs(context.Background(), map[string]interface{}{
+		"labels": "not_an_array", // Should be array
+	})
+	
+	if err != nil {
+		fmt.Printf("Parameter error: %v\n", err)
+	}
+	
+	// Try invalid regex pattern
+	fmt.Println("\n=== INVALID REGEX PATTERN ===")
+	runArgs := server.RunArgs{Command: "echo test", Label: "test"}
+	session, _ := sm.CreateSession("test", "echo test", "/tmp", []string{}, server.ModeRun, runArgs)
+	
+	logMsg := protocol.NewLogMessage(session.ID, "test", "test log", protocol.StreamStdout, 1234)
+	session.LogBuffer.AddFromMessage(logMsg)
+	
+	result, _ = mcpServer.HandleGetLogs(context.Background(), map[string]interface{}{
+		"labels": []interface{}{"test"},
+		"pattern": "[invalid regex(",
+	})
+	
+	if response, ok := result.(*protocol.GetLogsResponse); ok {
+		fmt.Printf("Results with invalid regex: %d\n", len(response.Data.Logs))
+		// Invalid regex results in no matches
+	}
+	
+	// Try to control non-existent process
+	fmt.Println("\n=== CONTROL NON-EXISTENT PROCESS ===")
+	_, err = mcpServer.HandleControlProcess(context.Background(), map[string]interface{}{
+		"label":  "nonexistent",
+		"action": "restart",
+	})
+	
+	if err != nil {
+		fmt.Printf("Control error: %v\n", err)
+	}
+	
+	// Output:
+	// === NON-EXISTENT SESSION ===
+	// Sessions queried: []
+	// Sessions not found: [nonexistent]
+	// Total results: 0
+	//
+	// === INVALID PARAMETERS ===
+	// Parameter error: labels must be an array
+	//
+	// === INVALID REGEX PATTERN ===
+	// Results with invalid regex: 0
+	//
+	// === CONTROL NON-EXISTENT PROCESS ===
+	// Control error: session not found: no session found with label: nonexistent
+}
+
+// ExampleMCPServer_JSONRPCProtocol demonstrates the JSON-RPC protocol format
+func ExampleMCPServer_JSONRPCProtocol() {
+	// This example shows the JSON-RPC message format used by MCP
+	
+	// Initialize request
+	initRequest := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"id":      "init-1",
+		"method":  "initialize",
+		"params":  map[string]interface{}{},
+	}
+	
+	initJSON, _ := json.MarshalIndent(initRequest, "", "  ")
+	fmt.Println("=== INITIALIZE REQUEST ===")
+	fmt.Println(string(initJSON))
+	
+	// Tools list request
+	toolsRequest := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"id":      "tools-1",
+		"method":  "tools/list",
+		"params":  map[string]interface{}{},
+	}
+	
+	toolsJSON, _ := json.MarshalIndent(toolsRequest, "", "  ")
+	fmt.Println("\n=== TOOLS LIST REQUEST ===")
+	fmt.Println(string(toolsJSON))
+	
+	// Tool call request
+	callRequest := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"id":      "call-1",
+		"method":  "tools/call",
+		"params": map[string]interface{}{
+			"name": "get_logs",
+			"arguments": map[string]interface{}{
+				"labels": []string{"backend", "frontend"},
+				"lines":  100,
+				"stream": "both",
+				"pattern": "ERROR.*",
+			},
+		},
+	}
+	
+	callJSON, _ := json.MarshalIndent(callRequest, "", "  ")
+	fmt.Println("\n=== TOOL CALL REQUEST ===")
+	fmt.Println(string(callJSON))
+	
+	// Sample response format
+	response := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"id":      "call-1",
+		"result": map[string]interface{}{
+			"content": []map[string]interface{}{
+				{
+					"type": "text",
+					"text": `{
+  "success": true,
+  "data": {
+    "logs": [
+      {
+        "label": "backend",
+        "content": "ERROR: Database connection failed",
+        "timestamp": "2025-01-01T10:30:00Z",
+        "stream": "stderr",
+        "pid": 1234
+      }
+    ]
+  }
+}`,
+				},
+			},
+		},
+	}
+	
+	responseJSON, _ := json.MarshalIndent(response, "", "  ")
+	fmt.Println("\n=== TOOL CALL RESPONSE ===")
+	fmt.Println(string(responseJSON))
+	
+	// Output:
+	// === INITIALIZE REQUEST ===
+	// {
+	//   "id": "init-1",
+	//   "jsonrpc": "2.0",
+	//   "method": "initialize",
+	//   "params": {}
+	// }
+	//
+	// === TOOLS LIST REQUEST ===
+	// {
+	//   "id": "tools-1",
+	//   "jsonrpc": "2.0",
+	//   "method": "tools/list",
+	//   "params": {}
+	// }
+	//
+	// === TOOL CALL REQUEST ===
+	// {
+	//   "id": "call-1",
+	//   "jsonrpc": "2.0",
+	//   "method": "tools/call",
+	//   "params": {
+	//     "arguments": {
+	//       "labels": [
+	//         "backend",
+	//         "frontend"
+	//       ],
+	//       "lines": 100,
+	//       "pattern": "ERROR.*",
+	//       "stream": "both"
+	//     },
+	//     "name": "get_logs"
+	//   }
+	// }
+	//
+	// === TOOL CALL RESPONSE ===
+	// {
+	//   "id": "call-1",
+	//   "jsonrpc": "2.0",
+	//   "result": {
+	//     "content": [
+	//       {
+	//         "text": "{\n  \"success\": true,\n  \"data\": {\n    \"logs\": [\n      {\n        \"label\": \"backend\",\n        \"content\": \"ERROR: Database connection failed\",\n        \"timestamp\": \"2025-01-01T10:30:00Z\",\n        \"stream\": \"stderr\",\n        \"pid\": 1234\n      }\n    ]\n  }\n}",
+	//         "type": "text"
+	//       }
+	//     ]
+	//   }
+	// }
+}

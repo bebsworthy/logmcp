@@ -1,0 +1,154 @@
+# LogMCP Configuration Example
+# 
+# This file shows all available configuration options with their default values.
+# Copy this file to config.yaml and modify as needed.
+#
+# Configuration can also be set via environment variables using the pattern:
+# LOGMCP_<SECTION>_<KEY> (e.g., LOGMCP_SERVER_HOST=0.0.0.0)
+
+# Server configuration
+server:
+  # Host to bind the WebSocket server to
+  # Environment variable: LOGMCP_SERVER_HOST
+  host: "localhost"
+  
+  # WebSocket server port
+  # Environment variable: LOGMCP_SERVER_WEBSOCKET_PORT
+  websocket_port: 8765
+  
+  # MCP transport mechanism: "stdio" or "unix:/path/to/socket"
+  # Environment variable: LOGMCP_SERVER_MCP_TRANSPORT
+  mcp_transport: "stdio"
+
+# Ring buffer configuration
+buffer:
+  # Maximum age of log entries before eviction
+  # Environment variable: LOGMCP_BUFFER_MAX_AGE
+  max_age: "5m"
+  
+  # Maximum total size of buffer before eviction
+  # Environment variable: LOGMCP_BUFFER_MAX_SIZE
+  max_size: "5MB"
+  
+  # Maximum size of individual log lines
+  # Environment variable: LOGMCP_BUFFER_MAX_LINE_SIZE
+  max_line_size: "64KB"
+  
+  # How often to run cleanup for expired entries
+  # Environment variable: LOGMCP_BUFFER_CLEANUP_INTERVAL
+  cleanup_interval: "30s"
+
+# Process management configuration
+process:
+  # Timeout for process startup
+  # Environment variable: LOGMCP_PROCESS_TIMEOUT
+  timeout: "30s"
+  
+  # Default working directory for processes
+  # Environment variable: LOGMCP_PROCESS_DEFAULT_WORKING_DIR
+  default_working_dir: "."
+  
+  # Maximum number of automatic restarts on failure
+  # Environment variable: LOGMCP_PROCESS_MAX_RESTARTS
+  max_restarts: 3
+  
+  # Delay between restart attempts
+  # Environment variable: LOGMCP_PROCESS_RESTART_DELAY
+  restart_delay: "5s"
+  
+  # Timeout for graceful process shutdown
+  # Environment variable: LOGMCP_PROCESS_GRACEFUL_SHUTDOWN_TIMEOUT
+  graceful_shutdown_timeout: "10s"
+
+# WebSocket client configuration
+websocket:
+  # Initial delay before first reconnection attempt
+  # Environment variable: LOGMCP_WEBSOCKET_RECONNECT_INITIAL_DELAY
+  reconnect_initial_delay: "1s"
+  
+  # Maximum delay between reconnection attempts
+  # Environment variable: LOGMCP_WEBSOCKET_RECONNECT_MAX_DELAY
+  reconnect_max_delay: "30s"
+  
+  # Maximum number of reconnection attempts (0 = unlimited)
+  # Environment variable: LOGMCP_WEBSOCKET_RECONNECT_MAX_ATTEMPTS
+  reconnect_max_attempts: 10
+  
+  # Interval for sending ping messages
+  # Environment variable: LOGMCP_WEBSOCKET_PING_INTERVAL
+  ping_interval: "30s"
+  
+  # Timeout for write operations
+  # Environment variable: LOGMCP_WEBSOCKET_WRITE_TIMEOUT
+  write_timeout: "10s"
+  
+  # Timeout for read operations
+  # Environment variable: LOGMCP_WEBSOCKET_READ_TIMEOUT
+  read_timeout: "60s"
+  
+  # Timeout for initial handshake
+  # Environment variable: LOGMCP_WEBSOCKET_HANDSHAKE_TIMEOUT
+  handshake_timeout: "10s"
+
+# Logging configuration
+logging:
+  # Log level: debug, info, warn, error, fatal
+  # Environment variable: LOGMCP_LOGGING_LEVEL
+  level: "info"
+  
+  # Log format: text, json
+  # Environment variable: LOGMCP_LOGGING_FORMAT
+  format: "text"
+  
+  # Log output file (empty = stdout)
+  # Environment variable: LOGMCP_LOGGING_OUTPUT_FILE
+  output_file: ""
+  
+  # Enable verbose logging
+  # Environment variable: LOGMCP_LOGGING_VERBOSE
+  verbose: false
+
+# Development and debugging configuration
+development:
+  # Enable Go pprof profiling endpoint
+  # Environment variable: LOGMCP_DEVELOPMENT_ENABLE_PROFILING
+  enable_profiling: false
+  
+  # Port for profiling endpoint (when enabled)
+  # Environment variable: LOGMCP_DEVELOPMENT_PROFILING_PORT
+  profiling_port: 6060
+  
+  # Enable debug mode with additional logging
+  # Environment variable: LOGMCP_DEVELOPMENT_DEBUG_MODE
+  debug_mode: false
+  
+  # Enable metrics collection and reporting
+  # Environment variable: LOGMCP_DEVELOPMENT_METRICS_ENABLED
+  metrics_enabled: false
+
+# Example production configuration:
+#
+# server:
+#   host: "0.0.0.0"
+#   websocket_port: 8765
+#
+# buffer:
+#   max_age: "10m"
+#   max_size: "50MB"
+#
+# logging:
+#   level: "warn"
+#   format: "json"
+#   output_file: "/var/log/logmcp/server.log"
+#
+# development:
+#   enable_profiling: true
+#   metrics_enabled: true
+
+# Example environment variable usage:
+#
+# export LOGMCP_SERVER_HOST=0.0.0.0
+# export LOGMCP_SERVER_WEBSOCKET_PORT=9000
+# export LOGMCP_LOGGING_LEVEL=debug
+# export LOGMCP_LOGGING_VERBOSE=true
+# logmcp serve

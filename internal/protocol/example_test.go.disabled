@@ -1,0 +1,121 @@
+package protocol
+
+import (
+	"fmt"
+	"time"
+)
+
+// ExampleLogMessage demonstrates how to create and serialize a log message
+func ExampleLogMessage() {
+	// Create a new log message
+	logMsg := NewLogMessage(
+		"backend-1",
+		"backend",
+		"Server started on port 3000",
+		StreamStdout,
+		1234,
+	)
+
+	// Serialize to JSON
+	data, err := SerializeMessage(logMsg)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Serialized log message: %s\n", string(data))
+
+	// Parse it back
+	parsed, err := ParseMessage(data)
+	if err != nil {
+		fmt.Printf("Error parsing: %v\n", err)
+		return
+	}
+
+	if parsedLog, ok := parsed.(*LogMessage); ok {
+		fmt.Printf("Parsed content: %s\n", parsedLog.Content)
+	}
+}
+
+// ExampleCommandMessage demonstrates how to create and use command messages
+func ExampleCommandMessage() {
+	// Create a restart command
+	restartCmd := NewCommandMessage("backend-1", ActionRestart, nil)
+
+	// Create a signal command
+	signal := SignalTERM
+	signalCmd := NewCommandMessage("backend-1", ActionSignal, &signal)
+
+	// Validate the messages
+	if err := ValidateMessage(restartCmd); err != nil {
+		fmt.Printf("Restart command validation failed: %v\n", err)
+	} else {
+		fmt.Println("Restart command is valid")
+	}
+
+	if err := ValidateMessage(signalCmd); err != nil {
+		fmt.Printf("Signal command validation failed: %v\n", err)
+	} else {
+		fmt.Println("Signal command is valid")
+	}
+}
+
+// ExampleMCPTools demonstrates MCP tool usage
+func ExampleMCPTools() {
+	// Get all available tools
+	tools := MCPTools
+	fmt.Printf("Available MCP tools: %d\n", len(tools))
+
+	for _, tool := range tools {
+		fmt.Printf("- %s: %s\n", tool.Name, tool.Description)
+	}
+
+	// Create a get_logs request
+	getLogsReq := &GetLogsRequest{
+		Labels: []string{"backend", "frontend"},
+		Lines:  intPtr(50),
+		Stream: stringPtr("both"),
+	}
+
+	// Validate the request
+	if err := ValidateMCPRequest("get_logs", getLogsReq); err != nil {
+		fmt.Printf("Request validation failed: %v\n", err)
+	} else {
+		fmt.Println("Get logs request is valid")
+	}
+}
+
+// ExampleSessionInfo demonstrates session information handling
+func ExampleSessionInfo() {
+	// Create session info
+	sessionInfo := SessionInfo{
+		Label:       "backend",
+		Status:      StatusRunning,
+		PID:         intPtr(1234),
+		Command:     "npm run server",
+		WorkingDir:  "/app/backend",
+		StartTime:   time.Now(),
+		LogCount:    150,
+		BufferSize:  "2.3MB",
+		RunnerMode:  ModeRun,
+		RunnerArgs: map[string]interface{}{
+			"command": "npm run server",
+			"label":   "backend",
+		},
+		Capabilities: []string{"process_control", "stdin"},
+	}
+
+	// Create a list sessions response
+	response := NewListSessionsResponse([]SessionInfo{sessionInfo})
+
+	// Serialize the response
+	data, err := SerializeMCPResponse(response)
+	if err != nil {
+		fmt.Printf("Error serializing response: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Session response size: %d bytes\n", len(data))
+	fmt.Printf("Active sessions: %d\n", response.Meta.ActiveCount)
+}
+
