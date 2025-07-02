@@ -1,3 +1,7 @@
+# WARNING WARNING WARNING WARNING WARNING
+
+None of this has been tested this is AI Generated slop 
+
 # LogMCP
 
 A Model Context Protocol (MCP) server that provides real-time log streaming and process management for AI assistants like Claude. LogMCP allows AI tools to monitor, analyze, and interact with running processes through live log feeds.
