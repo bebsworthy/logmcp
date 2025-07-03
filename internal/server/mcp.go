@@ -882,15 +882,17 @@ func (mcpSrv *MCPServer) handleControlProcess(ctx context.Context, request mcp.C
 
 // restartProcess restarts a managed process
 func (mcp *MCPServer) restartProcess(session *Session) (string, error) {
+	// Serialize restart operations for this session
+	session.restartMutex.Lock()
+	defer session.restartMutex.Unlock()
+
+	// Lock session for reading/updating state
 	session.mutex.Lock()
-	defer session.mutex.Unlock()
 
 	// Kill existing process if running
-	if session.Process != nil {
-		if err := session.Process.Kill(); err != nil {
-			log.Printf("Warning: failed to kill process %d: %v", session.PID, err)
-		}
-		session.Process.Wait() // Wait for cleanup
+	process := session.Process
+	if process != nil {
+		session.Process = nil // Clear reference before killing
 	}
 
 	// Update status
@@ -899,10 +901,11 @@ func (mcp *MCPServer) restartProcess(session *Session) (string, error) {
 	// Get managed args for restart
 	managedArgs, ok := session.RunnerArgs.(protocol.ManagedArgs)
 	if !ok {
+		session.mutex.Unlock()
 		return "", fmt.Errorf("session is not a managed process")
 	}
 
-	// Create restart request
+	// Make a copy of args to use after unlocking
 	req := protocol.StartProcessRequest{
 		Command:     managedArgs.Command,
 		Arguments:   managedArgs.Arguments,
@@ -911,13 +914,32 @@ func (mcp *MCPServer) restartProcess(session *Session) (string, error) {
 		Environment: managedArgs.Environment,
 	}
 
-	// Start new process
+	// Unlock before killing process (which might block)
+	session.mutex.Unlock()
+
+	// Kill the old process if it exists
+	if process != nil {
+		if err := process.Kill(); err != nil {
+			log.Printf("Warning: failed to kill process: %v", err)
+		}
+		process.Wait() // Wait for cleanup
+	}
+
+	// Start new process (this will acquire its own session.mutex as needed)
 	if err := mcp.startManagedProcess(session, req); err != nil {
+		// Update status on failure
+		session.mutex.Lock()
 		session.Status = protocol.StatusCrashed
+		session.mutex.Unlock()
 		return "", fmt.Errorf("failed to restart process: %w", err)
 	}
 
-	return fmt.Sprintf("Process restarted successfully with PID %d", session.PID), nil
+	// Get PID for return message
+	session.mutex.RLock()
+	pid := session.PID
+	session.mutex.RUnlock()
+
+	return fmt.Sprintf("Process restarted successfully with PID %d", pid), nil
 }
 
 // signalProcess sends a signal to a managed process

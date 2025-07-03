@@ -82,6 +82,7 @@ type Session struct {
 
 	// Internal fields for session management
 	mutex              sync.RWMutex  `json:"-"`
+	restartMutex       sync.Mutex    `json:"-"` // Serializes restart operations
 	lastActivityTime   time.Time     `json:"-"`
 	processTerminated  bool          `json:"-"`
 	connectionLostTime *time.Time    `json:"-"`
