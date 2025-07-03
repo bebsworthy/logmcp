@@ -70,14 +70,14 @@ func TestLogMCPError_Is(t *testing.T) {
 // TestLogMCPError_ToProtocolError tests protocol error conversion
 func TestLogMCPError_ToProtocolError(t *testing.T) {
 	err := ProcessError("PROCESS_FAILED", "Process execution failed", nil)
-	protocolErr := err.ToProtocolError("test-session")
+	protocolErr := err.ToProtocolError("test-label")
 	
 	if protocolErr.Type != protocol.MessageTypeError {
 		t.Errorf("Expected message type error, got %s", protocolErr.Type)
 	}
 	
-	if protocolErr.SessionID != "test-session" {
-		t.Errorf("Expected session ID 'test-session', got '%s'", protocolErr.SessionID)
+	if protocolErr.Label != "test-label" {
+		t.Errorf("Expected label 'test-label', got '%s'", protocolErr.Label)
 	}
 	
 	if protocolErr.ErrorCode != "PROCESS_FAILED" {

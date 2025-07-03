@@ -67,8 +67,8 @@ func (e *LogMCPError) Is(target error) bool {
 }
 
 // ToProtocolError converts the error to a protocol ErrorMessage
-func (e *LogMCPError) ToProtocolError(sessionID string) *protocol.ErrorMessage {
-	return protocol.NewErrorMessage(sessionID, e.Code, e.Message)
+func (e *LogMCPError) ToProtocolError(label string) *protocol.ErrorMessage {
+	return protocol.NewErrorMessage(label, e.Code, e.Message)
 }
 
 // WithDetails adds details to the error

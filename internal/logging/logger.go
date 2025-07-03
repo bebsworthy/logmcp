@@ -198,7 +198,7 @@ func NewServerLogger(cfg config.LoggingConfig) (*Logger, error) {
 }
 
 // NewRunnerLogger creates a logger for process runners
-func NewRunnerLogger(cfg config.LoggingConfig, sessionID, label string) (*Logger, error) {
+func NewRunnerLogger(cfg config.LoggingConfig, label string) (*Logger, error) {
 	logger, err := NewLogger(cfg)
 	if err != nil {
 		return nil, err
@@ -208,7 +208,6 @@ func NewRunnerLogger(cfg config.LoggingConfig, sessionID, label string) (*Logger
 	logger.Logger = logger.Logger.With(
 		slog.String("component", "runner"),
 		slog.String("service", "logmcp"),
-		slog.String("session_id", sessionID),
 		slog.String("label", label),
 	)
 	
@@ -216,7 +215,7 @@ func NewRunnerLogger(cfg config.LoggingConfig, sessionID, label string) (*Logger
 }
 
 // NewForwarderLogger creates a logger for log forwarders
-func NewForwarderLogger(cfg config.LoggingConfig, sessionID, label, source string) (*Logger, error) {
+func NewForwarderLogger(cfg config.LoggingConfig, label, source string) (*Logger, error) {
 	logger, err := NewLogger(cfg)
 	if err != nil {
 		return nil, err
@@ -226,7 +225,6 @@ func NewForwarderLogger(cfg config.LoggingConfig, sessionID, label, source strin
 	logger.Logger = logger.Logger.With(
 		slog.String("component", "forwarder"),
 		slog.String("service", "logmcp"),
-		slog.String("session_id", sessionID),
 		slog.String("label", label),
 		slog.String("source", source),
 	)

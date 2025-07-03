@@ -9,7 +9,6 @@ func TestParseMessage(t *testing.T) {
 	// Test LogMessage parsing
 	logJSON := `{
 		"type": "log",
-		"session_id": "test-session",
 		"label": "test-label",
 		"content": "test content",
 		"timestamp": "2025-06-30T10:30:00Z",
@@ -30,8 +29,8 @@ func TestParseMessage(t *testing.T) {
 	if logMsg.Type != MessageTypeLog {
 		t.Errorf("Expected type %s, got %s", MessageTypeLog, logMsg.Type)
 	}
-	if logMsg.SessionID != "test-session" {
-		t.Errorf("Expected session_id 'test-session', got '%s'", logMsg.SessionID)
+	if logMsg.Label != "test-label" {
+		t.Errorf("Expected label 'test-label', got '%s'", logMsg.Label)
 	}
 	if logMsg.Content != "test content" {
 		t.Errorf("Expected content 'test content', got '%s'", logMsg.Content)
@@ -46,7 +45,7 @@ func TestParseMessage(t *testing.T) {
 
 func TestSerializeMessage(t *testing.T) {
 	// Test LogMessage serialization
-	logMsg := NewLogMessage("test-session", "test-label", "test content", StreamStdout, 1234)
+	logMsg := NewLogMessage("test-label", "test content", StreamStdout, 1234)
 
 	data, err := SerializeMessage(logMsg)
 	if err != nil {
@@ -62,22 +61,21 @@ func TestSerializeMessage(t *testing.T) {
 	if parsed["type"] != string(MessageTypeLog) {
 		t.Errorf("Expected type %s, got %v", MessageTypeLog, parsed["type"])
 	}
-	if parsed["session_id"] != "test-session" {
-		t.Errorf("Expected session_id 'test-session', got %v", parsed["session_id"])
+	if parsed["label"] != "test-label" {
+		t.Errorf("Expected label 'test-label', got %v", parsed["label"])
 	}
 }
 
 func TestValidateMessage(t *testing.T) {
 	// Test valid message
-	validMsg := NewLogMessage("test-session", "test-label", "test content", StreamStdout, 1234)
+	validMsg := NewLogMessage("test-label", "test content", StreamStdout, 1234)
 	if err := ValidateMessage(validMsg); err != nil {
 		t.Errorf("Valid message failed validation: %v", err)
 	}
 
-	// Test invalid message (missing session_id)
+	// Test invalid message (missing label)
 	invalidMsg := &LogMessage{
 		BaseMessage: BaseMessage{Type: MessageTypeLog},
-		Label:       "test-label",
 		Content:     "test content",
 		Stream:      StreamStdout,
 	}
@@ -88,7 +86,7 @@ func TestValidateMessage(t *testing.T) {
 
 func TestCommandMessage(t *testing.T) {
 	signal := SignalTERM
-	cmdMsg := NewCommandMessage("test-session", ActionSignal, &signal)
+	cmdMsg := NewCommandMessage("test-label", ActionSignal, &signal)
 
 	if cmdMsg.Type != MessageTypeCommand {
 		t.Errorf("Expected type %s, got %s", MessageTypeCommand, cmdMsg.Type)
@@ -107,7 +105,7 @@ func TestCommandMessage(t *testing.T) {
 }
 
 func TestErrorMessage(t *testing.T) {
-	errMsg := NewErrorMessage("test-session", ErrorCodeProcessNotFound, "Process not found")
+	errMsg := NewErrorMessage("test-label", ErrorCodeProcessNotFound, "Process not found")
 
 	if errMsg.Type != MessageTypeError {
 		t.Errorf("Expected type %s, got %s", MessageTypeError, errMsg.Type)

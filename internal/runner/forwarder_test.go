@@ -368,7 +368,7 @@ func TestLogForwarder_WithWebSocket(t *testing.T) {
 	
 	// Create mock client
 	client := NewWebSocketClient("ws://localhost:8765", "test-label")
-	client.sessionID = "test-session"
+	// Client uses label for identification now
 	client.connMutex.Lock()
 	client.connected = true
 	client.connMutex.Unlock()

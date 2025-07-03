@@ -105,7 +105,6 @@ logmcp forward [--label LABEL] [--server-url URL] <source>
 ```json
 {
   "type": "log",
-  "session_id": "backend-1",
   "label": "backend",
   "content": "Server started on port 3000",
   "timestamp": "2025-06-30T10:30:00.123Z",
@@ -118,7 +117,7 @@ logmcp forward [--label LABEL] [--server-url URL] <source>
 ```json
 {
   "type": "command",
-  "session_id": "backend-1",
+  "label": "backend",
   "action": "restart|signal",
   "signal": "SIGTERM|SIGKILL|SIGINT|SIGHUP|SIGUSR1|SIGUSR2"
 }
@@ -128,7 +127,7 @@ logmcp forward [--label LABEL] [--server-url URL] <source>
 ```json
 {
   "type": "stdin",
-  "session_id": "backend-1",
+  "label": "backend",
   "input": "reload config\n"
 }
 ```
@@ -137,7 +136,7 @@ logmcp forward [--label LABEL] [--server-url URL] <source>
 ```json
 {
   "type": "ack",
-  "session_id": "backend-1", 
+  "label": "backend", 
   "command_id": "restart-123",
   "success": true,
   "message": "Process restarted with PID 5678",
@@ -149,7 +148,7 @@ logmcp forward [--label LABEL] [--server-url URL] <source>
 ```json
 {
   "type": "error",
-  "session_id": "backend-1",
+  "label": "backend",
   "error_code": "PROCESS_NOT_FOUND", 
   "message": "Cannot send signal to non-existent process",
   "details": {}
@@ -158,7 +157,7 @@ logmcp forward [--label LABEL] [--server-url URL] <source>
 ```json
 {
   "type": "status",
-  "session_id": "backend-1",
+  "label": "backend",
   "status": "running|stopped|crashed|restarting",
   "pid": 1234,
   "exit_code": null,
@@ -170,7 +169,6 @@ logmcp forward [--label LABEL] [--server-url URL] <source>
 ```json
 {
   "type": "register",
-  "session_id": "backend-1",
   "label": "backend",
   "command": "npm run server",
   "working_dir": "/app",
@@ -182,7 +180,7 @@ logmcp forward [--label LABEL] [--server-url URL] <source>
 ```json
 {
   "type": "ack",
-  "session_id": "backend", 
+  "label": "backend", 
   "command_id": "cmd-123",
   "success": true,
   "message": "Command executed successfully"
@@ -193,7 +191,7 @@ logmcp forward [--label LABEL] [--server-url URL] <source>
 ```json
 {
   "type": "error",
-  "session_id": "backend",
+  "label": "backend",
   "error_code": "PROCESS_NOT_FOUND",
   "message": "Process with PID 1234 not found"
 }
@@ -431,8 +429,7 @@ The following tools are available to LLMs through the MCP interface:
 ### Session
 ```go
 type Session struct {
-    ID           string        // User-provided or auto-generated unique identifier
-    Label        string        // User-friendly name (can be duplicate)
+    Label        string        // User-friendly name (also serves as unique identifier)
     Command      string        // Command being executed (for run mode) or source description
     WorkingDir   string        // Working directory where process was started
     Status       SessionStatus
@@ -490,8 +487,8 @@ type ManagedArgs struct {
 - **Behavior**: Time-based eviction runs every 30 seconds, size-based is immediate
 
 ### Session Management
-- **Session IDs**: Auto-generated UUID v4 if not provided by user
-- **Label conflicts**: Multiple sessions can share the same label
+- **Labels**: User-provided labels with automatic conflict resolution (backend, backend-2, backend-3, etc.)
+- **Label conflicts**: Automatically resolved by appending counter to ensure unique identification
 - **Disconnection handling**: Managed processes continue running, marked as "disconnected" status
 - **Cleanup**: Sessions auto-removed 1 hour after process termination and runner disconnection
 

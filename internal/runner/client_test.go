@@ -90,7 +90,7 @@ func TestWebSocketClient_IsConnected(t *testing.T) {
 // TestWebSocketClient_SendLogMessage tests log message sending
 func TestWebSocketClient_SendLogMessage(t *testing.T) {
 	client := NewWebSocketClient("ws://localhost:8765", "test-label")
-	client.sessionID = "test-session"
+	// Client uses label for identification now
 	
 	// Set connected state
 	client.connMutex.Lock()
@@ -164,7 +164,7 @@ func TestWebSocketClient_Close(t *testing.T) {
 // TestWebSocketClient_Health tests health checking
 func TestWebSocketClient_Health(t *testing.T) {
 	client := NewWebSocketClient("ws://localhost:8765", "test-label")
-	client.sessionID = "test-session"
+	// Client uses label for identification now
 	
 	// A disconnected client should not be healthy
 	if client.IsHealthy() {
@@ -177,8 +177,8 @@ func TestWebSocketClient_Health(t *testing.T) {
 		t.Errorf("Expected serverURL in health, got '%s'", health.ServerURL)
 	}
 	
-	if health.SessionID != "test-session" {
-		t.Errorf("Expected sessionID in health, got '%s'", health.SessionID)
+	if health.Label != "test-label" {
+		t.Errorf("Expected label in health, got '%s'", health.Label)
 	}
 	
 	// Close client and check health
@@ -390,7 +390,7 @@ func TestWebSocketClientWithLogMCPConfig(t *testing.T) {
 // BenchmarkWebSocketClient_SendLogMessage benchmarks log message sending
 func BenchmarkWebSocketClient_SendLogMessage(b *testing.B) {
 	client := NewWebSocketClient("ws://localhost:8765", "test-label")
-	client.sessionID = "test-session"
+	// Client uses label for identification now
 	
 	// Set connected state
 	client.connMutex.Lock()

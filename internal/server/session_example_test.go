@@ -41,7 +41,7 @@ func ExampleSessionManager() {
 
 	// Update session status
 	exitCode := 0
-	err = sm.UpdateSessionStatus(session.ID, protocol.StatusStopped, 1234, &exitCode)
+	err = sm.UpdateSessionStatus(session.Label, protocol.StatusStopped, 1234, &exitCode)
 	if err != nil {
 		fmt.Printf("Error updating session: %v\n", err)
 		return
@@ -74,13 +74,13 @@ func ExampleSessionManager_logBuffering() {
 	}
 
 	// Add some log entries to the session's buffer
-	logMsg1 := protocol.NewLogMessage(session.ID, session.Label, "Application starting...", protocol.StreamStdout, 1234)
+	logMsg1 := protocol.NewLogMessage(session.Label, "Application starting...", protocol.StreamStdout, 1234)
 	session.LogBuffer.AddFromMessage(logMsg1)
 
-	logMsg2 := protocol.NewLogMessage(session.ID, session.Label, "Database connected", protocol.StreamStdout, 1234)
+	logMsg2 := protocol.NewLogMessage(session.Label, "Database connected", protocol.StreamStdout, 1234)
 	session.LogBuffer.AddFromMessage(logMsg2)
 
-	logMsg3 := protocol.NewLogMessage(session.ID, session.Label, "Error: Connection failed", protocol.StreamStderr, 1234)
+	logMsg3 := protocol.NewLogMessage(session.Label, "Error: Connection failed", protocol.StreamStderr, 1234)
 	session.LogBuffer.AddFromMessage(logMsg3)
 
 	// Get buffer statistics
@@ -123,14 +123,14 @@ func ExampleSessionManager_cleanup() {
 	fmt.Printf("Created session: %s\n", session.Label)
 
 	// Simulate process termination and disconnection
-	err = sm.DisconnectSession(session.ID)
+	err = sm.DisconnectSession(session.Label)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return
 	}
 
 	exitCode := 0
-	err = sm.UpdateSessionStatus(session.ID, protocol.StatusStopped, 1234, &exitCode)
+	err = sm.UpdateSessionStatus(session.Label, protocol.StatusStopped, 1234, &exitCode)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return
@@ -139,7 +139,7 @@ func ExampleSessionManager_cleanup() {
 	fmt.Printf("Session marked as stopped and disconnected\n")
 
 	// Session should still exist immediately
-	_, err = sm.GetSession(session.ID)
+	_, err = sm.GetSession(session.Label)
 	if err != nil {
 		fmt.Printf("Unexpected error: %v\n", err)
 		return
@@ -151,7 +151,7 @@ func ExampleSessionManager_cleanup() {
 	time.Sleep(100 * time.Millisecond)
 
 	// Session should be cleaned up now
-	_, err = sm.GetSession(session.ID)
+	_, err = sm.GetSession(session.Label)
 	if err != nil {
 		fmt.Printf("Session cleaned up successfully\n")
 	} else {

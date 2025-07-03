@@ -680,7 +680,7 @@ func TestMCPProtocolLargeResponse(t *testing.T) {
 		// Calculate approximate response size
 		totalSize := 0
 		for _, log := range logs {
-			totalSize += len(log.Content) + len(log.Timestamp) + len(log.Stream) + len(log.SessionID)
+			totalSize += len(log.Content) + len(log.Timestamp) + len(log.Stream) + len(log.Label)
 		}
 		t.Logf("Approximate response size: %d bytes", totalSize)
 	})

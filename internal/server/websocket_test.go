@@ -91,7 +91,6 @@ func TestWebSocketServer_SessionRegistration(t *testing.T) {
 
 	// Send registration message
 	regMsg := protocol.NewSessionRegistrationMessage(
-		"test-session",
 		"backend",
 		"npm run server",
 		"/app",
@@ -173,7 +172,6 @@ func TestWebSocketServer_LogMessage(t *testing.T) {
 
 	// First register a session
 	regMsg := protocol.NewSessionRegistrationMessage(
-		"test-session",
 		"backend",
 		"npm run server",
 		"/app",
@@ -195,7 +193,6 @@ func TestWebSocketServer_LogMessage(t *testing.T) {
 
 	// Send log message
 	logMsg := protocol.NewLogMessage(
-		session.ID,
 		"backend",
 		"Server started on port 3000",
 		protocol.StreamStdout,
@@ -273,7 +270,6 @@ func TestWebSocketServer_StatusMessage(t *testing.T) {
 
 	// First register a session
 	regMsg := protocol.NewSessionRegistrationMessage(
-		"test-session",
 		"backend",
 		"npm run server",
 		"/app",
@@ -292,7 +288,7 @@ func TestWebSocketServer_StatusMessage(t *testing.T) {
 
 	// Send status message
 	pid := 1234
-	statusMsg := protocol.NewStatusMessage(session.ID, protocol.StatusRunning, &pid)
+	statusMsg := protocol.NewStatusMessage("backend", protocol.StatusRunning, &pid)
 	statusMsg.Message = "Process started successfully"
 
 	msgData, err = protocol.SerializeMessage(statusMsg)
@@ -309,7 +305,7 @@ func TestWebSocketServer_StatusMessage(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Verify session status was updated
-	updatedSession, err := sm.GetSession(session.ID)
+	updatedSession, err := sm.GetSession(session.Label)
 	if err != nil {
 		t.Fatalf("Failed to get updated session: %v", err)
 	}
@@ -347,7 +343,6 @@ func TestWebSocketServer_SendCommand(t *testing.T) {
 
 	// First register a session
 	regMsg := protocol.NewSessionRegistrationMessage(
-		"test-session",
 		"backend",
 		"npm run server",
 		"/app",
@@ -366,7 +361,7 @@ func TestWebSocketServer_SendCommand(t *testing.T) {
 
 	// Send command from server to client
 	signal := protocol.SignalTERM
-	err = ws.SendCommand(session.ID, protocol.ActionSignal, &signal)
+	err = ws.SendCommand(session.Label, protocol.ActionSignal, &signal)
 	if err != nil {
 		t.Fatalf("Failed to send command: %v", err)
 	}
@@ -396,8 +391,8 @@ func TestWebSocketServer_SendCommand(t *testing.T) {
 		t.Errorf("Expected signal %s, got %v", protocol.SignalTERM, cmd.Signal)
 	}
 
-	if cmd.SessionID != session.ID {
-		t.Errorf("Expected session ID %s, got %s", session.ID, cmd.SessionID)
+	if cmd.Label != "backend" {
+		t.Errorf("Expected label 'backend', got %s", cmd.Label)
 	}
 }
 
@@ -425,7 +420,6 @@ func TestWebSocketServer_SendStdin(t *testing.T) {
 
 	// First register a session
 	regMsg := protocol.NewSessionRegistrationMessage(
-		"test-session",
 		"backend",
 		"npm run server",
 		"/app",
@@ -444,7 +438,7 @@ func TestWebSocketServer_SendStdin(t *testing.T) {
 
 	// Send stdin from server to client
 	testInput := "reload config\n"
-	err = ws.SendStdin(session.ID, testInput)
+	err = ws.SendStdin(session.Label, testInput)
 	if err != nil {
 		t.Fatalf("Failed to send stdin: %v", err)
 	}
@@ -470,8 +464,8 @@ func TestWebSocketServer_SendStdin(t *testing.T) {
 		t.Errorf("Expected input '%s', got '%s'", testInput, stdin.Input)
 	}
 
-	if stdin.SessionID != session.ID {
-		t.Errorf("Expected session ID %s, got %s", session.ID, stdin.SessionID)
+	if stdin.Label != "backend" {
+		t.Errorf("Expected label 'backend', got %s", stdin.Label)
 	}
 }
 
@@ -511,7 +505,6 @@ func TestWebSocketServer_MultipleConnections(t *testing.T) {
 
 			// Register session
 			regMsg := protocol.NewSessionRegistrationMessage(
-				fmt.Sprintf("test-session-%d", clientNum),
 				fmt.Sprintf("backend-%d", clientNum),
 				"npm run server",
 				"/app",
@@ -526,17 +519,16 @@ func TestWebSocketServer_MultipleConnections(t *testing.T) {
 
 			// Send a log message
 			sessions := sm.ListSessions()
-			var sessionID string
+			var sessionLabel string
 			for _, session := range sessions {
 				if session.Label == fmt.Sprintf("backend-%d", clientNum) {
-					sessionID = session.ID
+					sessionLabel = session.Label
 					break
 				}
 			}
 
-			if sessionID != "" {
+			if sessionLabel != "" {
 				logMsg := protocol.NewLogMessage(
-					sessionID,
 					fmt.Sprintf("backend-%d", clientNum),
 					fmt.Sprintf("Log from client %d", clientNum),
 					protocol.StreamStdout,
@@ -602,7 +594,6 @@ func TestWebSocketServer_LabelConflictResolution(t *testing.T) {
 
 		// Register session with same label
 		regMsg := protocol.NewSessionRegistrationMessage(
-			fmt.Sprintf("test-session-%d", i),
 			"backend", // Same label for all
 			"npm run server",
 			"/app",
@@ -692,7 +683,6 @@ func TestWebSocketServer_ConnectionCleanup(t *testing.T) {
 
 	// Register session
 	regMsg := protocol.NewSessionRegistrationMessage(
-		"test-session",
 		"backend",
 		"npm run server",
 		"/app",
@@ -746,7 +736,7 @@ func TestWebSocketServer_ConnectionCleanup(t *testing.T) {
 		
 		// Check session disconnection
 		if !sessionDisconnected {
-			if updatedSession, err := sm.GetSession(session.ID); err == nil {
+			if updatedSession, err := sm.GetSession(session.Label); err == nil {
 				if updatedSession.ConnectionStatus == ConnectionDisconnected {
 					sessionDisconnected = true
 					t.Logf("Session disconnection completed after %v", elapsed)
@@ -786,7 +776,7 @@ func TestWebSocketServer_ConnectionCleanup(t *testing.T) {
 		t.Logf("Final connection count after %v additional wait: %d (expected 0)", time.Since(finalWaitStart), finalStats.TotalConnections)
 	}
 	
-	if finalSession, err := sm.GetSession(session.ID); err == nil {
+	if finalSession, err := sm.GetSession(session.Label); err == nil {
 		if finalSession.ConnectionStatus != ConnectionDisconnected {
 			t.Logf("Final session status after %v additional wait: %s (expected %s)", time.Since(finalWaitStart), finalSession.ConnectionStatus, ConnectionDisconnected)
 		}
@@ -824,7 +814,6 @@ func TestWebSocketServer_InvalidMessage(t *testing.T) {
 	// Connection should remain open (server handles gracefully)
 	// Send a valid registration message to verify connection is still working
 	regMsg := protocol.NewSessionRegistrationMessage(
-		"test-session",
 		"backend",
 		"npm run server",
 		"/app",
@@ -917,7 +906,6 @@ func TestWebSocketServer_Close(t *testing.T) {
 
 	// Register session
 	regMsg := protocol.NewSessionRegistrationMessage(
-		"test-session",
 		"backend",
 		"npm run server",
 		"/app",
@@ -969,13 +957,12 @@ func BenchmarkWebSocketServer_MessageProcessing(b *testing.B) {
 
 	// Create a mock connection info
 	connInfo := &ConnectionInfo{
-		SessionID:    "test-session",
+		Label:        "test-session",
 		LastActivity: time.Now(),
 	}
 
 	// Create a log message
 	logMsg := protocol.NewLogMessage(
-		"test-session",
 		"backend",
 		"Test log message",
 		protocol.StreamStdout,
@@ -986,7 +973,7 @@ func BenchmarkWebSocketServer_MessageProcessing(b *testing.B) {
 
 	// Create a test session
 	session, _ := sm.CreateSession("backend", "npm run server", "/app", []string{}, ModeRun, RunArgs{})
-	connInfo.SessionID = session.ID
+	connInfo.Label = session.Label
 
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
@@ -1023,7 +1010,6 @@ func BenchmarkWebSocketServer_ConcurrentConnections(b *testing.B) {
 
 			// Register session
 			regMsg := protocol.NewSessionRegistrationMessage(
-				fmt.Sprintf("test-session-%d", time.Now().UnixNano()),
 				"backend",
 				"npm run server",
 				"/app",

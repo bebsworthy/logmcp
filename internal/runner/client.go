@@ -57,7 +57,6 @@ type WebSocketClient struct {
 	conn       *websocket.Conn
 	connected  bool
 	connMutex  sync.RWMutex
-	sessionID  string
 
 	// Context and lifecycle
 	ctx        context.Context
@@ -77,7 +76,7 @@ type WebSocketClient struct {
 	OnLogMessage    func(content, stream string, pid int)
 	OnCommand       func(action string, signal *protocol.Signal) error
 	OnStdinMessage  func(input string) error
-	OnConnected     func(sessionID string)
+	OnConnected     func(label string)
 	OnDisconnected  func()
 	OnError         func(error)
 
@@ -225,13 +224,13 @@ func (c *WebSocketClient) Connect() error {
 
 	if c.logger != nil {
 		c.logger.InfoContext(c.ctx, "WebSocket connection established",
-			slog.String("session_id", c.sessionID),
+			slog.String("label", c.label),
 			slog.String("server_url", c.serverURL),
 		)
 	}
 
 	if c.OnConnected != nil {
-		c.OnConnected(c.sessionID)
+		c.OnConnected(c.label)
 	}
 
 	return nil
@@ -386,8 +385,7 @@ func (c *WebSocketClient) ConnectWithRetryLegacy() error {
 // registerSession sends session registration message to server
 func (c *WebSocketClient) registerSession() error {
 	regMsg := protocol.NewSessionRegistrationMessage(
-		"",               // SessionID (will be assigned by server)
-		c.label,          // Preferred label
+		c.label,          // Label
 		c.command,        // Command being executed
 		c.workingDir,     // Working directory
 		c.capabilities,   // Capabilities
@@ -421,7 +419,7 @@ func (c *WebSocketClient) registerSession() error {
 		if !m.Success {
 			return fmt.Errorf("registration failed: %s", m.Message)
 		}
-		c.sessionID = m.SessionID
+		// Session registration successful - label is already stored in c.label
 		return nil
 	case *protocol.ErrorMessage:
 		return fmt.Errorf("registration error: %s", m.Message)
@@ -436,7 +434,7 @@ func (c *WebSocketClient) SendLogMessage(content, stream string, pid int) error 
 		return fmt.Errorf("not connected")
 	}
 
-	logMsg := protocol.NewLogMessage(c.sessionID, c.label, content, protocol.StreamType(stream), pid)
+	logMsg := protocol.NewLogMessage(c.label, content, protocol.StreamType(stream), pid)
 	
 	select {
 	case c.messageChan <- logMsg:
@@ -454,7 +452,7 @@ func (c *WebSocketClient) SendStatusMessage(status protocol.SessionStatus, pid i
 		return fmt.Errorf("not connected")
 	}
 
-	statusMsg := protocol.NewStatusMessage(c.sessionID, status, &pid)
+	statusMsg := protocol.NewStatusMessage(c.label, status, &pid)
 	
 	select {
 	case c.messageChan <- statusMsg:
@@ -472,7 +470,7 @@ func (c *WebSocketClient) SendAckMessage(commandID string, success bool, message
 		return fmt.Errorf("not connected")
 	}
 
-	ackMsg := protocol.NewAckMessage(c.sessionID, success, message)
+	ackMsg := protocol.NewAckMessage(c.label, success, message)
 	ackMsg.CommandID = commandID
 	
 	select {
@@ -653,9 +651,9 @@ func (c *WebSocketClient) IsConnected() bool {
 	return c.connected
 }
 
-// GetSessionID returns the assigned session ID
-func (c *WebSocketClient) GetSessionID() string {
-	return c.sessionID
+// GetLabel returns the label for this client
+func (c *WebSocketClient) GetLabel() string {
+	return c.label
 }
 
 // Close closes the WebSocket connection
@@ -747,7 +745,7 @@ func (c *WebSocketClient) GetHealth() WebSocketClientHealth {
 	return WebSocketClientHealth{
 		IsHealthy:         c.IsHealthy(),
 		Connected:         c.IsConnected(),
-		SessionID:         c.sessionID,
+		Label:             c.label,
 		ServerURL:         c.serverURL,
 		ReconnectAttempts: c.reconnectAttempts,
 	}
@@ -757,7 +755,7 @@ func (c *WebSocketClient) GetHealth() WebSocketClientHealth {
 type WebSocketClientHealth struct {
 	IsHealthy         bool   `json:"is_healthy"`
 	Connected         bool   `json:"connected"`
-	SessionID         string `json:"session_id"`
+	Label             string `json:"label"`
 	ServerURL         string `json:"server_url"`
 	ReconnectAttempts int    `json:"reconnect_attempts"`
 }

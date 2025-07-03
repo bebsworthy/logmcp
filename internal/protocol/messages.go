@@ -59,14 +59,13 @@ const (
 
 // BaseMessage contains common fields for all message types
 type BaseMessage struct {
-	Type      MessageType `json:"type" validate:"required"`
-	SessionID string      `json:"session_id" validate:"required"`
+	Type  MessageType `json:"type" validate:"required"`
+	Label string      `json:"label" validate:"required"`
 }
 
 // LogMessage represents a log entry from runner to server
 type LogMessage struct {
 	BaseMessage
-	Label     string    `json:"label" validate:"required"`
 	Content   string    `json:"content" validate:"required"`
 	Timestamp time.Time `json:"timestamp" validate:"required"`
 	Stream    StreamType `json:"stream" validate:"required,oneof=stdout stderr"`
@@ -116,7 +115,6 @@ type StatusMessage struct {
 // SessionRegistrationMessage represents a runner registering with the server
 type SessionRegistrationMessage struct {
 	BaseMessage
-	Label        string   `json:"label" validate:"required"`
 	Command      string   `json:"command,omitempty"`
 	WorkingDir   string   `json:"working_dir,omitempty"`
 	Capabilities []string `json:"capabilities,omitempty"`
@@ -124,9 +122,9 @@ type SessionRegistrationMessage struct {
 
 // Message represents any WebSocket message
 type Message struct {
-	Type      MessageType     `json:"type"`
-	SessionID string          `json:"session_id,omitempty"`
-	Data      json.RawMessage `json:",inline"`
+	Type  MessageType     `json:"type"`
+	Label string          `json:"label,omitempty"`
+	Data  json.RawMessage `json:",inline"`
 }
 
 // ParseMessage parses a raw JSON message into the appropriate struct
@@ -207,9 +205,6 @@ func ValidateMessage(msg interface{}) error {
 		if m.Type != MessageTypeLog {
 			return fmt.Errorf("invalid message type for LogMessage")
 		}
-		if m.SessionID == "" {
-			return fmt.Errorf("session_id is required")
-		}
 		if m.Label == "" {
 			return fmt.Errorf("label is required")
 		}
@@ -224,8 +219,8 @@ func ValidateMessage(msg interface{}) error {
 		if m.Type != MessageTypeCommand {
 			return fmt.Errorf("invalid message type for CommandMessage")
 		}
-		if m.SessionID == "" {
-			return fmt.Errorf("session_id is required")
+		if m.Label == "" {
+			return fmt.Errorf("label is required")
 		}
 		if m.Action != ActionRestart && m.Action != ActionSignal {
 			return fmt.Errorf("action must be restart or signal")
@@ -238,8 +233,8 @@ func ValidateMessage(msg interface{}) error {
 		if m.Type != MessageTypeStdin {
 			return fmt.Errorf("invalid message type for StdinMessage")
 		}
-		if m.SessionID == "" {
-			return fmt.Errorf("session_id is required")
+		if m.Label == "" {
+			return fmt.Errorf("label is required")
 		}
 		if m.Input == "" {
 			return fmt.Errorf("input is required")
@@ -249,16 +244,16 @@ func ValidateMessage(msg interface{}) error {
 		if m.Type != MessageTypeAck {
 			return fmt.Errorf("invalid message type for AckMessage")
 		}
-		if m.SessionID == "" {
-			return fmt.Errorf("session_id is required")
+		if m.Label == "" {
+			return fmt.Errorf("label is required")
 		}
 
 	case *ErrorMessage:
 		if m.Type != MessageTypeError {
 			return fmt.Errorf("invalid message type for ErrorMessage")
 		}
-		if m.SessionID == "" {
-			return fmt.Errorf("session_id is required")
+		if m.Label == "" {
+			return fmt.Errorf("label is required")
 		}
 		if m.ErrorCode == "" {
 			return fmt.Errorf("error_code is required")
@@ -271,8 +266,8 @@ func ValidateMessage(msg interface{}) error {
 		if m.Type != MessageTypeStatus {
 			return fmt.Errorf("invalid message type for StatusMessage")
 		}
-		if m.SessionID == "" {
-			return fmt.Errorf("session_id is required")
+		if m.Label == "" {
+			return fmt.Errorf("label is required")
 		}
 		if m.Status != StatusRunning && m.Status != StatusStopped && 
 		   m.Status != StatusCrashed && m.Status != StatusRestarting {
@@ -282,9 +277,6 @@ func ValidateMessage(msg interface{}) error {
 	case *SessionRegistrationMessage:
 		if m.Type != MessageTypeRegister {
 			return fmt.Errorf("invalid message type for SessionRegistrationMessage")
-		}
-		if m.SessionID == "" {
-			return fmt.Errorf("session_id is required")
 		}
 		if m.Label == "" {
 			return fmt.Errorf("label is required")
@@ -314,13 +306,12 @@ const (
 // Helper functions to create common messages
 
 // NewLogMessage creates a new log message
-func NewLogMessage(sessionID, label, content string, stream StreamType, pid int) *LogMessage {
+func NewLogMessage(label, content string, stream StreamType, pid int) *LogMessage {
 	return &LogMessage{
 		BaseMessage: BaseMessage{
-			Type:      MessageTypeLog,
-			SessionID: sessionID,
+			Type:  MessageTypeLog,
+			Label: label,
 		},
-		Label:     label,
 		Content:   content,
 		Timestamp: time.Now(),
 		Stream:    stream,
@@ -329,11 +320,11 @@ func NewLogMessage(sessionID, label, content string, stream StreamType, pid int)
 }
 
 // NewCommandMessage creates a new command message
-func NewCommandMessage(sessionID string, action CommandAction, signal *Signal) *CommandMessage {
+func NewCommandMessage(label string, action CommandAction, signal *Signal) *CommandMessage {
 	msg := &CommandMessage{
 		BaseMessage: BaseMessage{
-			Type:      MessageTypeCommand,
-			SessionID: sessionID,
+			Type:  MessageTypeCommand,
+			Label: label,
 		},
 		Action: action,
 	}
@@ -344,22 +335,22 @@ func NewCommandMessage(sessionID string, action CommandAction, signal *Signal) *
 }
 
 // NewStdinMessage creates a new stdin message
-func NewStdinMessage(sessionID, input string) *StdinMessage {
+func NewStdinMessage(label, input string) *StdinMessage {
 	return &StdinMessage{
 		BaseMessage: BaseMessage{
-			Type:      MessageTypeStdin,
-			SessionID: sessionID,
+			Type:  MessageTypeStdin,
+			Label: label,
 		},
 		Input: input,
 	}
 }
 
 // NewAckMessage creates a new acknowledgment message
-func NewAckMessage(sessionID string, success bool, message string) *AckMessage {
+func NewAckMessage(label string, success bool, message string) *AckMessage {
 	return &AckMessage{
 		BaseMessage: BaseMessage{
-			Type:      MessageTypeAck,
-			SessionID: sessionID,
+			Type:  MessageTypeAck,
+			Label: label,
 		},
 		Success: success,
 		Message: message,
@@ -367,11 +358,11 @@ func NewAckMessage(sessionID string, success bool, message string) *AckMessage {
 }
 
 // NewErrorMessage creates a new error message
-func NewErrorMessage(sessionID, errorCode, message string) *ErrorMessage {
+func NewErrorMessage(label, errorCode, message string) *ErrorMessage {
 	return &ErrorMessage{
 		BaseMessage: BaseMessage{
-			Type:      MessageTypeError,
-			SessionID: sessionID,
+			Type:  MessageTypeError,
+			Label: label,
 		},
 		ErrorCode: errorCode,
 		Message:   message,
@@ -380,11 +371,11 @@ func NewErrorMessage(sessionID, errorCode, message string) *ErrorMessage {
 }
 
 // NewStatusMessage creates a new status message
-func NewStatusMessage(sessionID string, status SessionStatus, pid *int) *StatusMessage {
+func NewStatusMessage(label string, status SessionStatus, pid *int) *StatusMessage {
 	return &StatusMessage{
 		BaseMessage: BaseMessage{
-			Type:      MessageTypeStatus,
-			SessionID: sessionID,
+			Type:  MessageTypeStatus,
+			Label: label,
 		},
 		Status: status,
 		PID:    pid,
@@ -392,13 +383,12 @@ func NewStatusMessage(sessionID string, status SessionStatus, pid *int) *StatusM
 }
 
 // NewSessionRegistrationMessage creates a new session registration message
-func NewSessionRegistrationMessage(sessionID, label, command, workingDir string, capabilities []string) *SessionRegistrationMessage {
+func NewSessionRegistrationMessage(label, command, workingDir string, capabilities []string) *SessionRegistrationMessage {
 	return &SessionRegistrationMessage{
 		BaseMessage: BaseMessage{
-			Type:      MessageTypeRegister,
-			SessionID: sessionID,
+			Type:  MessageTypeRegister,
+			Label: label,
 		},
-		Label:        label,
 		Command:      command,
 		WorkingDir:   workingDir,
 		Capabilities: capabilities,

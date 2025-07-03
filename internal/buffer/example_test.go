@@ -30,10 +30,9 @@ func ExampleRingBuffer() {
 	// Add entries from protocol messages
 	msg := &protocol.LogMessage{
 		BaseMessage: protocol.BaseMessage{
-			Type:      protocol.MessageTypeLog,
-			SessionID: "session-1",
+			Type:  protocol.MessageTypeLog,
+			Label: "web-server",
 		},
-		Label:     "web-server",
 		Content:   "Received GET request for /api/users",
 		Timestamp: now.Add(1 * time.Second),
 		Stream:    protocol.StreamStdout,

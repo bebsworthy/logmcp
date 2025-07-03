@@ -45,8 +45,8 @@ func TestGetLogs_BasicSingleSession(t *testing.T) {
 
 	for _, log := range logs {
 		// Verify basic log structure
-		if log.SessionID != "basic-logs" {
-			t.Errorf("Expected session ID 'basic-logs', got '%s'", log.SessionID)
+		if log.Label != "basic-logs" {
+			t.Errorf("Expected label 'basic-logs', got '%s'", log.Label)
 		}
 		if log.Timestamp == "" {
 			t.Error("Log entry missing timestamp")
@@ -112,7 +112,7 @@ func TestGetLogs_MultiSessionAggregation(t *testing.T) {
 	// Verify we got logs from all sessions
 	sessionCounts := make(map[string]int)
 	for _, log := range logs {
-		sessionCounts[log.SessionID]++
+		sessionCounts[log.Label]++
 	}
 
 	for _, label := range sessions {
@@ -484,7 +484,7 @@ func TestGetLogs_MaxResultsAcrossSessions(t *testing.T) {
 	// Verify logs are from multiple sessions
 	sessionCounts := make(map[string]int)
 	for _, log := range logs {
-		sessionCounts[log.SessionID]++
+		sessionCounts[log.Label]++
 	}
 
 	sessionsThatProvidedLogs := 0
@@ -515,7 +515,7 @@ func TestGetLogs_MaxResultsAcrossSessions(t *testing.T) {
 		// No session should have more than 5 logs
 		sessionCounts := make(map[string]int)
 		for _, log := range logs {
-			sessionCounts[log.SessionID]++
+			sessionCounts[log.Label]++
 		}
 		for session, count := range sessionCounts {
 			if count > 5 {
@@ -561,8 +561,8 @@ func TestGetLogs_NonExistentSession(t *testing.T) {
 
 		// Should only have logs from real session
 		for _, log := range logs {
-			if log.SessionID != "real-session" {
-				t.Errorf("Got log from unexpected session: %s", log.SessionID)
+			if log.Label != "real-session" {
+				t.Errorf("Got log from unexpected session: %s", log.Label)
 			}
 		}
 
@@ -636,7 +636,7 @@ func TestGetLogs_CombinedFilters(t *testing.T) {
 	// Check per-session limit
 	sessionCounts := make(map[string]int)
 	for _, log := range logs {
-		sessionCounts[log.SessionID]++
+		sessionCounts[log.Label]++
 	}
 	for session, count := range sessionCounts {
 		if count > 5 {
@@ -708,8 +708,8 @@ func TestGetLogs_LargeLogVolume(t *testing.T) {
 		// Check first and last log
 		for _, idx := range []int{0, len(logs) - 1} {
 			log := logs[idx]
-			if log.SessionID != "verbose" {
-				t.Errorf("Log %d has wrong session ID: %s", idx, log.SessionID)
+			if log.Label != "verbose" {
+				t.Errorf("Log %d has wrong label: %s", idx, log.Label)
 			}
 			if log.Timestamp == "" {
 				t.Errorf("Log %d missing timestamp", idx)

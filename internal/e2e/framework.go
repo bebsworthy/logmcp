@@ -74,12 +74,11 @@ type LogEntry struct {
 	Timestamp string
 	Stream    string
 	Content   string
-	SessionID string
+	Label     string
 }
 
 // Session represents a process session
 type Session struct {
-	ID        string
 	Label     string
 	Status    string
 	PID       int
@@ -365,7 +364,7 @@ func (ts *TestServer) GetLogs(labels []string, opts ...LogOption) ([]LogEntry, e
 				Timestamp: log.Timestamp.Format(time.RFC3339),
 				Stream:    log.Stream,
 				Content:   log.Content,
-				SessionID: log.Label, // Use label as session ID
+				Label:     log.Label,
 			}
 			logs = append(logs, entry)
 		}
@@ -417,7 +416,6 @@ func (ts *TestServer) ListSessions() ([]Session, error) {
 			Success bool `json:"success"`
 			Data    struct {
 				Sessions []struct {
-					ID        string     `json:"id"`
 					Label     string     `json:"label"`
 					Status    string     `json:"status"`
 					PID       int        `json:"pid,omitempty"`
@@ -439,7 +437,6 @@ func (ts *TestServer) ListSessions() ([]Session, error) {
 
 		for _, s := range response.Data.Sessions {
 			session := Session{
-				ID:        s.ID,
 				Label:     s.Label,
 				Status:    s.Status,
 				PID:       s.PID,

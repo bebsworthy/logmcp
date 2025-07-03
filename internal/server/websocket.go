@@ -58,7 +58,7 @@ type WebSocketServer struct {
 
 // ConnectionInfo stores information about a WebSocket connection
 type ConnectionInfo struct {
-	SessionID    string
+	Label        string
 	LastPing     time.Time
 	LastActivity time.Time
 	mutex        sync.RWMutex
@@ -206,9 +206,9 @@ func (ws *WebSocketServer) handleMessages(ctx context.Context, conn *websocket.C
 				log.Printf("Error processing message: %v", err)
 				
 				// Send error response if we can identify the session
-				if connInfo.SessionID != "" {
+				if connInfo.Label != "" {
 					errorMsg := protocol.NewErrorMessage(
-						connInfo.SessionID,
+						connInfo.Label,
 						protocol.ErrorCodeInvalidMessage,
 						fmt.Sprintf("Message processing failed: %v", err),
 					)
@@ -286,7 +286,7 @@ func (ws *WebSocketServer) handleRegistration(conn *websocket.Conn, connInfo *Co
 	if err != nil {
 		// Send error response
 		errorMsg := protocol.NewErrorMessage(
-			msg.SessionID,
+			msg.Label,
 			protocol.ErrorCodeInternalError,
 			fmt.Sprintf("Failed to create session: %v", err),
 		)
@@ -295,27 +295,27 @@ func (ws *WebSocketServer) handleRegistration(conn *websocket.Conn, connInfo *Co
 
 	// Update connection info
 	connInfo.mutex.Lock()
-	connInfo.SessionID = session.ID
+	connInfo.Label = session.Label
 	connInfo.mutex.Unlock()
 
 	// Associate connection with session
-	if err := ws.sessionManager.SetConnection(session.ID, conn); err != nil {
-		log.Printf("Warning: Failed to set connection for session %s: %v", session.ID, err)
+	if err := ws.sessionManager.SetConnection(session.Label, conn); err != nil {
+		log.Printf("Warning: Failed to set connection for session %s: %v", session.Label, err)
 	}
 
 	// Send acknowledgment with assigned label
-	ackMsg := protocol.NewAckMessage(session.ID, true, fmt.Sprintf("Session registered with label: %s", session.Label))
+	ackMsg := protocol.NewAckMessage(session.Label, true, fmt.Sprintf("Session registered with label: %s", session.Label))
 	return ws.sendMessage(conn, ackMsg)
 }
 
 // handleLogMessage processes log messages
 func (ws *WebSocketServer) handleLogMessage(connInfo *ConnectionInfo, msg *protocol.LogMessage) error {
-	if connInfo.SessionID == "" {
+	if connInfo.Label == "" {
 		return fmt.Errorf("session not registered")
 	}
 
 	// Get session
-	session, err := ws.sessionManager.GetSession(connInfo.SessionID)
+	session, err := ws.sessionManager.GetSession(connInfo.Label)
 	if err != nil {
 		return fmt.Errorf("session not found: %w", err)
 	}
@@ -334,7 +334,7 @@ func (ws *WebSocketServer) handleLogMessage(connInfo *ConnectionInfo, msg *proto
 
 // handleStatusMessage processes status update messages
 func (ws *WebSocketServer) handleStatusMessage(connInfo *ConnectionInfo, msg *protocol.StatusMessage) error {
-	if connInfo.SessionID == "" {
+	if connInfo.Label == "" {
 		return fmt.Errorf("session not registered")
 	}
 
@@ -344,7 +344,7 @@ func (ws *WebSocketServer) handleStatusMessage(connInfo *ConnectionInfo, msg *pr
 		pid = *msg.PID
 	}
 
-	return ws.sessionManager.UpdateSessionStatus(connInfo.SessionID, msg.Status, pid, msg.ExitCode)
+	return ws.sessionManager.UpdateSessionStatus(connInfo.Label, msg.Status, pid, msg.ExitCode)
 }
 
 // handleAckMessage processes acknowledgment messages
@@ -352,7 +352,7 @@ func (ws *WebSocketServer) handleAckMessage(connInfo *ConnectionInfo, msg *proto
 	// For now, just log the acknowledgment
 	// In a more complete implementation, this would match against pending commands
 	log.Printf("Received acknowledgment from session %s: success=%v, message=%s", 
-		connInfo.SessionID, msg.Success, msg.Message)
+		connInfo.Label, msg.Success, msg.Message)
 	return nil
 }
 
@@ -360,7 +360,7 @@ func (ws *WebSocketServer) handleAckMessage(connInfo *ConnectionInfo, msg *proto
 func (ws *WebSocketServer) handleErrorMessage(connInfo *ConnectionInfo, msg *protocol.ErrorMessage) error {
 	// Log the error
 	log.Printf("Received error from session %s: code=%s, message=%s", 
-		connInfo.SessionID, msg.ErrorCode, msg.Message)
+		connInfo.Label, msg.ErrorCode, msg.Message)
 	return nil
 }
 
@@ -388,9 +388,9 @@ func (ws *WebSocketServer) handlePing(ctx context.Context, conn *websocket.Conn,
 }
 
 // SendCommand sends a command message to a specific session
-func (ws *WebSocketServer) SendCommand(sessionID string, action protocol.CommandAction, signal *protocol.Signal) error {
+func (ws *WebSocketServer) SendCommand(label string, action protocol.CommandAction, signal *protocol.Signal) error {
 	// Get session
-	session, err := ws.sessionManager.GetSession(sessionID)
+	session, err := ws.sessionManager.GetSession(label)
 	if err != nil {
 		return fmt.Errorf("session not found: %w", err)
 	}
@@ -405,7 +405,7 @@ func (ws *WebSocketServer) SendCommand(sessionID string, action protocol.Command
 	}
 
 	// Create command message
-	cmdMsg := protocol.NewCommandMessage(sessionID, action, signal)
+	cmdMsg := protocol.NewCommandMessage(session.Label, action, signal)
 	
 	// Generate command ID for tracking
 	cmdMsg.CommandID = fmt.Sprintf("cmd-%d", time.Now().UnixNano())
@@ -415,9 +415,9 @@ func (ws *WebSocketServer) SendCommand(sessionID string, action protocol.Command
 }
 
 // SendStdin sends input to a specific session's stdin
-func (ws *WebSocketServer) SendStdin(sessionID, input string) error {
+func (ws *WebSocketServer) SendStdin(label, input string) error {
 	// Get session
-	session, err := ws.sessionManager.GetSession(sessionID)
+	session, err := ws.sessionManager.GetSession(label)
 	if err != nil {
 		return fmt.Errorf("session not found: %w", err)
 	}
@@ -432,7 +432,7 @@ func (ws *WebSocketServer) SendStdin(sessionID, input string) error {
 	}
 
 	// Create stdin message
-	stdinMsg := protocol.NewStdinMessage(sessionID, input)
+	stdinMsg := protocol.NewStdinMessage(session.Label, input)
 
 	// Send message
 	return ws.sendMessage(conn, stdinMsg)
@@ -479,9 +479,9 @@ func (ws *WebSocketServer) BroadcastMessage(msg interface{}) error {
 // cleanup removes a connection and updates associated session
 func (ws *WebSocketServer) cleanup(conn *websocket.Conn, connInfo *ConnectionInfo) {
 	// Update session first before removing connection
-	if connInfo.SessionID != "" {
-		if err := ws.sessionManager.DisconnectSession(connInfo.SessionID); err != nil {
-			log.Printf("Warning: Failed to disconnect session %s: %v", connInfo.SessionID, err)
+	if connInfo.Label != "" {
+		if err := ws.sessionManager.DisconnectSession(connInfo.Label); err != nil {
+			log.Printf("Warning: Failed to disconnect session %s: %v", connInfo.Label, err)
 		}
 	}
 
@@ -490,7 +490,7 @@ func (ws *WebSocketServer) cleanup(conn *websocket.Conn, connInfo *ConnectionInf
 	delete(ws.connections, conn)
 	ws.connMutex.Unlock()
 
-	log.Printf("WebSocket connection closed for session: %s", connInfo.SessionID)
+	log.Printf("WebSocket connection closed for session: %s", connInfo.Label)
 }
 
 // GetConnectionStats returns statistics about active connections
@@ -505,7 +505,7 @@ func (ws *WebSocketServer) GetConnectionStats() ConnectionStats {
 
 	for _, connInfo := range ws.connections {
 		connInfo.mutex.RLock()
-		if connInfo.SessionID != "" {
+		if connInfo.Label != "" {
 			stats.RegisteredSessions++
 		}
 		connInfo.mutex.RUnlock()

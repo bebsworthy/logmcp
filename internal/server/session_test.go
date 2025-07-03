@@ -15,7 +15,6 @@ func TestNewSessionManager(t *testing.T) {
 
 	assert.NotNil(t, sm)
 	assert.NotNil(t, sm.sessions)
-	assert.NotNil(t, sm.sessionsByLabel)
 	assert.NotNil(t, sm.cleanupScheduled)
 	assert.Equal(t, DefaultCleanupDelay, sm.cleanupDelay)
 }
@@ -33,7 +32,6 @@ func TestCreateSession(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, session)
 
-	assert.NotEmpty(t, session.ID)
 	assert.Equal(t, "test", session.Label)
 	assert.Equal(t, "test command", session.Command)
 	assert.Equal(t, "/tmp", session.WorkingDir)
@@ -65,7 +63,7 @@ func TestLabelConflictResolution(t *testing.T) {
 	assert.Equal(t, "test-3", session3.Label)
 
 	// Remove session2 and create another - should reuse "test-2" since it's available
-	err = sm.RemoveSession(session2.ID)
+	err = sm.RemoveSession(session2.Label)
 	require.NoError(t, err)
 
 	session4, err := sm.CreateSession("test", "cmd4", "/tmp", nil, ModeRun, nil)
@@ -87,9 +85,9 @@ func TestGetSession(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test getting existing session
-	retrieved, err := sm.GetSession(session.ID)
+	retrieved, err := sm.GetSession(session.Label)
 	require.NoError(t, err)
-	assert.Equal(t, session.ID, retrieved.ID)
+	assert.Equal(t, session.Label, retrieved.Label)
 	assert.Equal(t, session.Label, retrieved.Label)
 }
 
@@ -98,9 +96,9 @@ func TestGetSessionByLabel(t *testing.T) {
 	defer sm.Close()
 
 	// Test getting non-existent label
-	_, err := sm.GetSessionByLabel("non-existent")
+	_, err := sm.GetSession("non-existent")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "no session found with label")
+	assert.Contains(t, err.Error(), "session not found")
 
 	// Create sessions
 	session1, err := sm.CreateSession("test", "cmd1", "/tmp", nil, ModeRun, nil)
@@ -109,15 +107,15 @@ func TestGetSessionByLabel(t *testing.T) {
 	session2, err := sm.CreateSession("test", "cmd2", "/tmp", nil, ModeRun, nil)
 	require.NoError(t, err)
 
-	// Test getting session by label (should return first one)
-	retrieved, err := sm.GetSessionByLabel("test")
+	// Test getting session by label
+	retrieved, err := sm.GetSession("test")
 	require.NoError(t, err)
-	assert.Equal(t, session1.ID, retrieved.ID)
+	assert.Equal(t, session1.Label, retrieved.Label)
 
 	// Test getting session by resolved label
-	retrieved2, err := sm.GetSessionByLabel("test-2")
+	retrieved2, err := sm.GetSession("test-2")
 	require.NoError(t, err)
-	assert.Equal(t, session2.ID, retrieved2.ID)
+	assert.Equal(t, session2.Label, retrieved2.Label)
 }
 
 func TestGetSessionsByLabel(t *testing.T) {
@@ -125,8 +123,8 @@ func TestGetSessionsByLabel(t *testing.T) {
 	defer sm.Close()
 
 	// Test getting non-existent label
-	sessions := sm.GetSessionsByLabel("non-existent")
-	assert.Empty(t, sessions)
+	session := sm.GetSessionsByLabel("non-existent")
+	assert.Nil(t, session)
 
 	// Create sessions with same original label
 	session1, err := sm.CreateSession("test", "cmd1", "/tmp", nil, ModeRun, nil)
@@ -135,15 +133,15 @@ func TestGetSessionsByLabel(t *testing.T) {
 	session2, err := sm.CreateSession("test", "cmd2", "/tmp", nil, ModeRun, nil)
 	require.NoError(t, err)
 
-	// Test getting sessions by original label (should return only session1)
-	sessions = sm.GetSessionsByLabel("test")
-	assert.Len(t, sessions, 1)
-	assert.Equal(t, session1.ID, sessions[0].ID)
+	// Test getting sessions by original label (should return session1)
+	retrieved := sm.GetSessionsByLabel("test")
+	assert.NotNil(t, retrieved)
+	assert.Equal(t, session1.Label, retrieved.Label)
 
-	// Test getting sessions by resolved label (should return only session2)
-	sessions = sm.GetSessionsByLabel("test-2")
-	assert.Len(t, sessions, 1)
-	assert.Equal(t, session2.ID, sessions[0].ID)
+	// Test getting sessions by resolved label (should return session2)
+	retrieved2 := sm.GetSessionsByLabel("test-2")
+	assert.NotNil(t, retrieved2)
+	assert.Equal(t, session2.Label, retrieved2.Label)
 }
 
 func TestListSessions(t *testing.T) {
@@ -166,9 +164,9 @@ func TestListSessions(t *testing.T) {
 	assert.Len(t, sessions, 2)
 
 	// Check that both sessions are present (order not guaranteed)
-	sessionIDs := []string{sessions[0].ID, sessions[1].ID}
-	assert.Contains(t, sessionIDs, session1.ID)
-	assert.Contains(t, sessionIDs, session2.ID)
+	sessionLabels := []string{sessions[0].Label, sessions[1].Label}
+	assert.Contains(t, sessionLabels, session1.Label)
+	assert.Contains(t, sessionLabels, session2.Label)
 }
 
 func TestUpdateSessionStatus(t *testing.T) {
@@ -186,11 +184,11 @@ func TestUpdateSessionStatus(t *testing.T) {
 
 	// Test updating status
 	exitCode := 0
-	err = sm.UpdateSessionStatus(session.ID, protocol.StatusStopped, 1234, &exitCode)
+	err = sm.UpdateSessionStatus(session.Label, protocol.StatusStopped, 1234, &exitCode)
 	require.NoError(t, err)
 
 	// Verify status was updated
-	retrieved, err := sm.GetSession(session.ID)
+	retrieved, err := sm.GetSession(session.Label)
 	require.NoError(t, err)
 	assert.Equal(t, protocol.StatusStopped, retrieved.Status)
 	assert.Equal(t, 1234, retrieved.PID)
@@ -212,20 +210,20 @@ func TestSetConnectionAndDisconnect(t *testing.T) {
 	assert.Nil(t, session.Connection)
 
 	// Set connection (we'll use nil as mock connection for test purposes)
-	err = sm.SetConnection(session.ID, nil)
+	err = sm.SetConnection(session.Label, nil)
 	require.NoError(t, err)
 
 	// Verify connection status
-	retrieved, err := sm.GetSession(session.ID)
+	retrieved, err := sm.GetSession(session.Label)
 	require.NoError(t, err)
 	assert.Equal(t, ConnectionConnected, retrieved.ConnectionStatus)
 
 	// Disconnect
-	err = sm.DisconnectSession(session.ID)
+	err = sm.DisconnectSession(session.Label)
 	require.NoError(t, err)
 
 	// Verify disconnection
-	retrieved, err = sm.GetSession(session.ID)
+	retrieved, err = sm.GetSession(session.Label)
 	require.NoError(t, err)
 	assert.Equal(t, ConnectionDisconnected, retrieved.ConnectionStatus)
 	assert.NotNil(t, retrieved.connectionLostTime)
@@ -245,15 +243,15 @@ func TestRemoveSession(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify session exists
-	_, err = sm.GetSession(session.ID)
+	_, err = sm.GetSession(session.Label)
 	require.NoError(t, err)
 
 	// Remove session
-	err = sm.RemoveSession(session.ID)
+	err = sm.RemoveSession(session.Label)
 	require.NoError(t, err)
 
 	// Verify session no longer exists
-	_, err = sm.GetSession(session.ID)
+	_, err = sm.GetSession(session.Label)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "session not found")
 
@@ -271,23 +269,23 @@ func TestScheduleCleanup(t *testing.T) {
 	require.NoError(t, err)
 
 	// Mark as both disconnected and terminated
-	err = sm.DisconnectSession(session.ID)
+	err = sm.DisconnectSession(session.Label)
 	require.NoError(t, err)
 
 	exitCode := 0
-	err = sm.UpdateSessionStatus(session.ID, protocol.StatusStopped, 1234, &exitCode)
+	err = sm.UpdateSessionStatus(session.Label, protocol.StatusStopped, 1234, &exitCode)
 	require.NoError(t, err)
 
 	// Verify cleanup is scheduled
 	sm.mutex.RLock()
-	cleanupTime, scheduled := sm.cleanupScheduled[session.ID]
+	cleanupTime, scheduled := sm.cleanupScheduled[session.Label]
 	sm.mutex.RUnlock()
 
 	assert.True(t, scheduled)
 	assert.True(t, cleanupTime.After(time.Now()))
 
 	// Verify session is marked for cleanup
-	retrieved, err := sm.GetSession(session.ID)
+	retrieved, err := sm.GetSession(session.Label)
 	require.NoError(t, err)
 	assert.True(t, retrieved.cleanupScheduled)
 }
@@ -310,12 +308,12 @@ func TestSessionManagerStats(t *testing.T) {
 	require.NoError(t, err)
 
 	// Connect one session
-	err = sm.SetConnection(session1.ID, nil)
+	err = sm.SetConnection(session1.Label, nil)
 	require.NoError(t, err)
 
 	// Stop one session
 	exitCode := 0
-	err = sm.UpdateSessionStatus(session2.ID, protocol.StatusStopped, 1234, &exitCode)
+	err = sm.UpdateSessionStatus(session2.Label, protocol.StatusStopped, 1234, &exitCode)
 	require.NoError(t, err)
 
 	// Check stats
@@ -420,8 +418,8 @@ func TestConcurrentAccess(t *testing.T) {
 	// Verify all sessions have unique IDs
 	seenIDs := make(map[string]bool)
 	for _, session := range sessions {
-		assert.False(t, seenIDs[session.ID], "Duplicate session ID: %s", session.ID)
-		seenIDs[session.ID] = true
+		assert.False(t, seenIDs[session.Label], "Duplicate session ID: %s", session.Label)
+		seenIDs[session.Label] = true
 	}
 
 	// Verify label conflict resolution worked
@@ -446,24 +444,24 @@ func TestCleanupAfterProcessTerminationAndDisconnection(t *testing.T) {
 	require.NoError(t, err)
 
 	// Connect and then disconnect
-	err = sm.SetConnection(session.ID, nil)
+	err = sm.SetConnection(session.Label, nil)
 	require.NoError(t, err)
 
-	err = sm.DisconnectSession(session.ID)
+	err = sm.DisconnectSession(session.Label)
 	require.NoError(t, err)
 
 	// Terminate process
 	exitCode := 0
-	err = sm.UpdateSessionStatus(session.ID, protocol.StatusStopped, 1234, &exitCode)
+	err = sm.UpdateSessionStatus(session.Label, protocol.StatusStopped, 1234, &exitCode)
 	require.NoError(t, err)
 
 	// Session should still exist immediately
-	_, err = sm.GetSession(session.ID)
+	_, err = sm.GetSession(session.Label)
 	require.NoError(t, err)
 
 	// Verify cleanup is scheduled
 	sm.mutex.RLock()
-	_, scheduled := sm.cleanupScheduled[session.ID]
+	_, scheduled := sm.cleanupScheduled[session.Label]
 	sm.mutex.RUnlock()
 	assert.True(t, scheduled, "Cleanup should be scheduled")
 
@@ -471,11 +469,11 @@ func TestCleanupAfterProcessTerminationAndDisconnection(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Session should be cleaned up
-	_, err = sm.GetSession(session.ID)
+	_, err = sm.GetSession(session.Label)
 	if err == nil {
 		t.Logf("Session still exists, checking cleanup state...")
 		sm.mutex.RLock()
-		_, stillScheduled := sm.cleanupScheduled[session.ID]
+		_, stillScheduled := sm.cleanupScheduled[session.Label]
 		sm.mutex.RUnlock()
 		t.Logf("Session still scheduled for cleanup: %v", stillScheduled)
 	}
@@ -495,29 +493,29 @@ func TestReconnectionCancelsCleanup(t *testing.T) {
 	require.NoError(t, err)
 
 	// Connect, disconnect, and terminate
-	err = sm.SetConnection(session.ID, nil)
+	err = sm.SetConnection(session.Label, nil)
 	require.NoError(t, err)
 
-	err = sm.DisconnectSession(session.ID)
+	err = sm.DisconnectSession(session.Label)
 	require.NoError(t, err)
 
 	exitCode := 0
-	err = sm.UpdateSessionStatus(session.ID, protocol.StatusStopped, 1234, &exitCode)
+	err = sm.UpdateSessionStatus(session.Label, protocol.StatusStopped, 1234, &exitCode)
 	require.NoError(t, err)
 
 	// Verify cleanup is scheduled
 	sm.mutex.RLock()
-	_, scheduled := sm.cleanupScheduled[session.ID]
+	_, scheduled := sm.cleanupScheduled[session.Label]
 	sm.mutex.RUnlock()
 	assert.True(t, scheduled)
 
 	// Reconnect before cleanup occurs
-	err = sm.SetConnection(session.ID, nil)
+	err = sm.SetConnection(session.Label, nil)
 	require.NoError(t, err)
 
 	// Verify cleanup is cancelled
 	sm.mutex.RLock()
-	_, scheduled = sm.cleanupScheduled[session.ID]
+	_, scheduled = sm.cleanupScheduled[session.Label]
 	sm.mutex.RUnlock()
 	assert.False(t, scheduled)
 
@@ -525,6 +523,6 @@ func TestReconnectionCancelsCleanup(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	// Session should still exist
-	_, err = sm.GetSession(session.ID)
+	_, err = sm.GetSession(session.Label)
 	require.NoError(t, err)
 }

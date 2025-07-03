@@ -121,7 +121,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	}
 	
 	if verbose {
-		fmt.Printf("Connected successfully! Session ID: %s\n", runner.GetWebSocketClient().GetSessionID())
+		fmt.Printf("Connected successfully! Label: %s\n", runner.GetWebSocketClient().GetLabel())
 	}
 	
 	// Run the process with signal handling
@@ -146,9 +146,9 @@ func createWebSocketClient(serverURL, label, command, workingDir string) *runner
 	client.SetCommand(command, workingDir, []string{"process_control", "stdin"})
 	
 	// Set up client callbacks
-	client.OnConnected = func(sessionID string) {
+	client.OnConnected = func(label string) {
 		if verbose {
-			log.Printf("Session registered: %s", sessionID)
+			log.Printf("Session registered with label: %s", label)
 		}
 	}
 	

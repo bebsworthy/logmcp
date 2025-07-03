@@ -37,10 +37,9 @@ func TestNewDefaultRingBuffer(t *testing.T) {
 func TestLogEntry_NewLogEntry(t *testing.T) {
 	msg := &protocol.LogMessage{
 		BaseMessage: protocol.BaseMessage{
-			Type:      protocol.MessageTypeLog,
-			SessionID: "test-session",
+			Type:  protocol.MessageTypeLog,
+			Label: "test-label",
 		},
-		Label:     "test-label",
 		Content:   "test content",
 		Timestamp: time.Now(),
 		Stream:    protocol.StreamStdout,
@@ -69,10 +68,9 @@ func TestLogEntry_NewLogEntry_ContentTruncation(t *testing.T) {
 	
 	msg := &protocol.LogMessage{
 		BaseMessage: protocol.BaseMessage{
-			Type:      protocol.MessageTypeLog,
-			SessionID: "test-session",
+			Type:  protocol.MessageTypeLog,
+			Label: "test-label",
 		},
-		Label:     "test-label",
 		Content:   longContent,
 		Timestamp: time.Now(),
 		Stream:    protocol.StreamStdout,
@@ -191,10 +189,9 @@ func TestRingBuffer_AddFromMessage(t *testing.T) {
 
 	msg := &protocol.LogMessage{
 		BaseMessage: protocol.BaseMessage{
-			Type:      protocol.MessageTypeLog,
-			SessionID: "test-session",
+			Type:  protocol.MessageTypeLog,
+			Label: "test-label",
 		},
-		Label:     "test-label",
 		Content:   "test message",
 		Timestamp: time.Now(),
 		Stream:    protocol.StreamStdout,

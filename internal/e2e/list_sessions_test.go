@@ -218,9 +218,9 @@ func TestListSessions_SessionMetadataAccuracy(t *testing.T) {
 	}
 
 	// Note: The log count in session metadata might be approximate due to buffering
-	// Just verify it's not zero if we have logs
-	if len(logs) > 0 && targetSession.ID == "" {
-		t.Log("Warning: Session has logs but metadata might not reflect log count accurately")
+	// Just verify we have logs
+	if len(logs) == 0 {
+		t.Log("Warning: Expected logs but found none")
 	}
 
 	// Stop the process
@@ -482,8 +482,8 @@ func TestListSessions_SessionTypes(t *testing.T) {
 			found = true
 
 			// Verify it's a managed session
-			t.Logf("Session details: ID=%s, Label=%s, Status=%s",
-				session.ID, session.Label, session.Status)
+			t.Logf("Session details: Label=%s, Status=%s",
+				session.Label, session.Status)
 
 			// All test processes started via StartTestProcess are managed
 			if session.Status != "running" {

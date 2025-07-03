@@ -381,20 +381,19 @@ func (mcpSrv *MCPServer) handleGetLogs(ctx context.Context, request mcp.CallTool
 	totalResults := 0
 
 	for _, label := range req.Labels {
-		sessions := mcpSrv.sessionManager.GetSessionsByLabel(label)
-		if len(sessions) == 0 {
+		session := mcpSrv.sessionManager.GetSessionsByLabel(label)
+		if session == nil {
 			notFoundSessions = append(notFoundSessions, label)
 			continue
 		}
 
 		queriedSessions = append(queriedSessions, label)
 
-		for _, session := range sessions {
-			session.mutex.RLock()
-			if session.LogBuffer == nil {
-				session.mutex.RUnlock()
-				continue
-			}
+		session.mutex.RLock()
+		if session.LogBuffer == nil {
+			session.mutex.RUnlock()
+			continue
+		}
 
 			// Build query options
 			opts := buffer.GetOptions{
@@ -413,28 +412,23 @@ func (mcpSrv *MCPServer) handleGetLogs(ctx context.Context, request mcp.CallTool
 				}
 			}
 
-			// Get logs from buffer
-			bufferLogs := session.LogBuffer.Get(opts)
-			session.mutex.RUnlock()
+		// Get logs from buffer
+		bufferLogs := session.LogBuffer.Get(opts)
+		session.mutex.RUnlock()
 
-			// Convert to protocol format
-			for _, bufferLog := range bufferLogs {
-				protocolLog := protocol.LogEntry{
-					Label:     bufferLog.Label,
-					Content:   bufferLog.Content,
-					Timestamp: bufferLog.Timestamp,
-					Stream:    bufferLog.Stream,
-					PID:       bufferLog.PID,
-				}
-				allLogs = append(allLogs, protocolLog)
-				totalResults++
-
-				// Check if we've reached the max results limit
-				if totalResults >= *req.MaxResults {
-					break
-				}
+		// Convert to protocol format
+		for _, bufferLog := range bufferLogs {
+			protocolLog := protocol.LogEntry{
+				Label:     bufferLog.Label,
+				Content:   bufferLog.Content,
+				Timestamp: bufferLog.Timestamp,
+				Stream:    bufferLog.Stream,
+				PID:       bufferLog.PID,
 			}
+			allLogs = append(allLogs, protocolLog)
+			totalResults++
 
+			// Check if we've reached the max results limit
 			if totalResults >= *req.MaxResults {
 				break
 			}
@@ -574,7 +568,7 @@ func (mcpSrv *MCPServer) handleStartProcess(ctx context.Context, request mcp.Cal
 	// Start the process
 	if err := mcpSrv.startManagedProcess(session, req); err != nil {
 		// Clean up session on failure
-		mcpSrv.sessionManager.RemoveSession(session.ID)
+		mcpSrv.sessionManager.RemoveSession(session.Label)
 		return nil, fmt.Errorf("failed to start process: %w", err)
 	}
 
@@ -689,7 +683,7 @@ func (mcpSrv *MCPServer) startManagedProcess(session *Session, req protocol.Star
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
 			line := scanner.Text()
-			logMsg := protocol.NewLogMessage(session.ID, session.Label, line, protocol.StreamStdout, session.PID)
+			logMsg := protocol.NewLogMessage(session.Label, line, protocol.StreamStdout, session.PID)
 			if session.LogBuffer != nil {
 				session.LogBuffer.AddFromMessage(logMsg)
 			}
@@ -704,7 +698,7 @@ func (mcpSrv *MCPServer) startManagedProcess(session *Session, req protocol.Star
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
 			line := scanner.Text()
-			logMsg := protocol.NewLogMessage(session.ID, session.Label, line, protocol.StreamStderr, session.PID)
+			logMsg := protocol.NewLogMessage(session.Label, line, protocol.StreamStderr, session.PID)
 			if session.LogBuffer != nil {
 				session.LogBuffer.AddFromMessage(logMsg)
 			}
@@ -773,7 +767,7 @@ func (mcpSrv *MCPServer) startManagedProcess(session *Session, req protocol.Star
 		log.Printf("[DEBUG] Process %s (PID %d) completed with exit code %d, status: %s", 
 			session.Label, session.PID, exitCode, status)
 
-		mcpSrv.sessionManager.UpdateSessionStatus(session.ID, status, session.PID, &exitCode)
+		mcpSrv.sessionManager.UpdateSessionStatus(session.Label, status, session.PID, &exitCode)
 	}()
 
 	return nil
@@ -807,7 +801,7 @@ func (mcpSrv *MCPServer) handleControlProcess(ctx context.Context, request mcp.C
 	}
 
 	// Get session
-	session, err := mcpSrv.sessionManager.GetSessionByLabel(req.Label)
+	session, err := mcpSrv.sessionManager.GetSession(req.Label)
 	if err != nil {
 		return nil, fmt.Errorf("session not found: %w", err)
 	}
@@ -989,7 +983,7 @@ func (mcpSrv *MCPServer) handleSendStdin(ctx context.Context, request mcp.CallTo
 
 	// For managed processes, we need to send directly to the process stdin
 	// For remote processes, we use the WebSocket server
-	session, err := mcpSrv.sessionManager.GetSessionByLabel(req.Label)
+	session, err := mcpSrv.sessionManager.GetSession(req.Label)
 	if err != nil {
 		return nil, fmt.Errorf("session not found: %w", err)
 	}
@@ -1005,7 +999,7 @@ func (mcpSrv *MCPServer) handleSendStdin(ctx context.Context, request mcp.CallTo
 		message = "Input sent to managed process stdin"
 	} else {
 		// Send via WebSocket for remote processes
-		if err := mcpSrv.wsServer.SendStdin(session.ID, req.Input); err != nil {
+		if err := mcpSrv.wsServer.SendStdin(session.Label, req.Input); err != nil {
 			return nil, fmt.Errorf("failed to send stdin: %w", err)
 		}
 		bytesSent = len(req.Input)

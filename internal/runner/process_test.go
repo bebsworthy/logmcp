@@ -451,7 +451,7 @@ func TestProcessRunner_WithWebSocket(t *testing.T) {
 	
 	// Create mock client with same label as runner
 	client := NewWebSocketClient("ws://localhost:8765", "test-echo")
-	client.sessionID = "test-session"
+	// Client uses label for identification now
 	client.connMutex.Lock()
 	client.connected = true
 	client.connMutex.Unlock()
@@ -496,9 +496,7 @@ func TestProcessRunner_WithWebSocket(t *testing.T) {
 			if msg.Label != "test-echo" {
 				t.Errorf("Expected label 'test-echo', got '%s'", msg.Label)
 			}
-			if msg.SessionID != "test-session" {
-				t.Errorf("Expected sessionID 'test-session', got '%s'", msg.SessionID)
-			}
+			// Label is now used for identification instead of SessionID
 			break
 		}
 	}

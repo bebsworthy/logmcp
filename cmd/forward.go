@@ -148,7 +148,7 @@ func runForward(cmd *cobra.Command, args []string) error {
 	}
 	
 	if verbose {
-		fmt.Printf("Connected successfully! Session ID: %s\n", forwarder.GetWebSocketClient().GetSessionID())
+		fmt.Printf("Connected successfully! Label: %s\n", forwarder.GetWebSocketClient().GetLabel())
 	}
 	
 	// Run the forwarder
@@ -241,9 +241,9 @@ func createForwarderWebSocketClient(serverURL, label, source string) *runner.Web
 	client.SetCommand("", getCurrentWorkingDir(), []string{})
 	
 	// Set up client callbacks
-	client.OnConnected = func(sessionID string) {
+	client.OnConnected = func(label string) {
 		if verbose {
-			log.Printf("Session registered: %s", sessionID)
+			log.Printf("Session registered with label: %s", label)
 		}
 	}
 	

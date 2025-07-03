@@ -1,7 +1,7 @@
 // Package server provides session management functionality for the LogMCP server.
 //
 // The session management system handles:
-// - Session creation with automatic UUID generation
+// - Session creation with label-based identification
 // - Label conflict resolution with automatic numbering (backend, backend-2, backend-3, etc.)
 // - Connection state tracking (connected/disconnected)
 // - Process lifecycle management (running, stopped, crashed, restarting)
@@ -22,10 +22,10 @@
 //	}
 //
 //	// Update session status when process state changes
-//	err = sm.UpdateSessionStatus(session.ID, protocol.StatusRunning, 1234, nil)
+//	err = sm.UpdateSessionStatus(session.Label, protocol.StatusRunning, 1234, nil)
 //
 //	// Set WebSocket connection
-//	err = sm.SetConnection(session.ID, conn)
+//	err = sm.SetConnection(session.Label, conn)
 //
 //	// Get session statistics
 //	stats := sm.GetSessionStats()
@@ -40,7 +40,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/logmcp/logmcp/internal/buffer"
 	"github.com/logmcp/logmcp/internal/protocol"
@@ -65,8 +64,7 @@ const (
 
 // Session represents a logging session with a process or log source
 type Session struct {
-	ID               string                 `json:"id"`                // UUID v4 unique identifier
-	Label            string                 `json:"label"`             // User-friendly name
+	Label            string                 `json:"label"`             // User-friendly name (also serves as unique identifier)
 	Command          string                 `json:"command"`           // Command being executed or source description
 	WorkingDir       string                 `json:"working_dir"`       // Working directory
 	Status           protocol.SessionStatus `json:"status"`            // running|stopped|crashed|restarting
@@ -112,9 +110,8 @@ type ManagedArgs struct {
 // SessionManager manages all active sessions
 type SessionManager struct {
 	mutex            sync.RWMutex
-	sessions         map[string]*Session          // sessionID -> Session
-	sessionsByLabel  map[string][]*Session        // label -> []Session (for conflict resolution)
-	cleanupScheduled map[string]time.Time         // sessionID -> cleanup time
+	sessions         map[string]*Session          // label -> Session
+	cleanupScheduled map[string]time.Time         // label -> cleanup time
 	ctx              context.Context
 	cancel           context.CancelFunc
 	cleanupWg        sync.WaitGroup
@@ -150,7 +147,6 @@ func NewSessionManagerWithConfig(cleanupDelay, cleanupInterval time.Duration) *S
 
 	sm := &SessionManager{
 		sessions:         make(map[string]*Session),
-		sessionsByLabel:  make(map[string][]*Session),
 		cleanupScheduled: make(map[string]time.Time),
 		ctx:              ctx,
 		cancel:           cancel,
@@ -166,20 +162,16 @@ func NewSessionManagerWithConfig(cleanupDelay, cleanupInterval time.Duration) *S
 	return sm
 }
 
-// CreateSession creates a new session with automatic ID generation and label conflict resolution
+// CreateSession creates a new session with label conflict resolution
 func (sm *SessionManager) CreateSession(label, command, workingDir string, capabilities []string, mode RunnerMode, args interface{}) (*Session, error) {
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
-
-	// Generate unique session ID
-	sessionID := uuid.New().String()
 
 	// Resolve label conflicts
 	resolvedLabel := sm.resolveLabelConflictUnsafe(label)
 
 	// Create new session
 	session := &Session{
-		ID:               sessionID,
 		Label:            resolvedLabel,
 		Command:          command,
 		WorkingDir:       workingDir,
@@ -198,9 +190,8 @@ func (sm *SessionManager) CreateSession(label, command, workingDir string, capab
 		lastActivityTime: time.Now(),
 	}
 
-	// Add to session maps
-	sm.sessions[sessionID] = session
-	sm.sessionsByLabel[resolvedLabel] = append(sm.sessionsByLabel[resolvedLabel], session)
+	// Add to session map
+	sm.sessions[resolvedLabel] = session
 
 	return session, nil
 }
@@ -208,7 +199,7 @@ func (sm *SessionManager) CreateSession(label, command, workingDir string, capab
 // resolveLabelConflictUnsafe generates a unique label by appending a counter if needed
 func (sm *SessionManager) resolveLabelConflictUnsafe(label string) string {
 	// Check if label is already in use
-	if sessions, exists := sm.sessionsByLabel[label]; !exists || len(sessions) == 0 {
+	if _, exists := sm.sessions[label]; !exists {
 		return label
 	}
 
@@ -216,53 +207,37 @@ func (sm *SessionManager) resolveLabelConflictUnsafe(label string) string {
 	counter := 2
 	for {
 		candidateLabel := fmt.Sprintf("%s%s%d", label, LabelCounterSeparator, counter)
-		if sessions, exists := sm.sessionsByLabel[candidateLabel]; !exists || len(sessions) == 0 {
+		if _, exists := sm.sessions[candidateLabel]; !exists {
 			return candidateLabel
 		}
 		counter++
 	}
 }
 
-// GetSession retrieves a session by ID
-func (sm *SessionManager) GetSession(sessionID string) (*Session, error) {
+// GetSession retrieves a session by label
+func (sm *SessionManager) GetSession(label string) (*Session, error) {
 	sm.mutex.RLock()
 	defer sm.mutex.RUnlock()
 
-	session, exists := sm.sessions[sessionID]
+	session, exists := sm.sessions[label]
 	if !exists {
-		return nil, fmt.Errorf("session not found: %s", sessionID)
+		return nil, fmt.Errorf("session not found: %s", label)
 	}
 
 	return session, nil
 }
 
-// GetSessionByLabel retrieves the first session with the given label
-func (sm *SessionManager) GetSessionByLabel(label string) (*Session, error) {
+// GetSessionsByLabel retrieves the session with the given label
+func (sm *SessionManager) GetSessionsByLabel(label string) *Session {
 	sm.mutex.RLock()
 	defer sm.mutex.RUnlock()
 
-	sessions, exists := sm.sessionsByLabel[label]
-	if !exists || len(sessions) == 0 {
-		return nil, fmt.Errorf("no session found with label: %s", label)
-	}
-
-	return sessions[0], nil
-}
-
-// GetSessionsByLabel retrieves all sessions with the given label
-func (sm *SessionManager) GetSessionsByLabel(label string) []*Session {
-	sm.mutex.RLock()
-	defer sm.mutex.RUnlock()
-
-	sessions, exists := sm.sessionsByLabel[label]
+	session, exists := sm.sessions[label]
 	if !exists {
-		return []*Session{}
+		return nil
 	}
 
-	// Return a copy to avoid race conditions
-	result := make([]*Session, len(sessions))
-	copy(result, sessions)
-	return result
+	return session
 }
 
 // ListSessions returns all active sessions
@@ -279,13 +254,13 @@ func (sm *SessionManager) ListSessions() []*Session {
 }
 
 // UpdateSessionStatus updates the status of a session
-func (sm *SessionManager) UpdateSessionStatus(sessionID string, status protocol.SessionStatus, pid int, exitCode *int) error {
+func (sm *SessionManager) UpdateSessionStatus(label string, status protocol.SessionStatus, pid int, exitCode *int) error {
 	sm.mutex.RLock()
-	session, exists := sm.sessions[sessionID]
+	session, exists := sm.sessions[label]
 	sm.mutex.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("session not found: %s", sessionID)
+		return fmt.Errorf("session not found: %s", label)
 	}
 
 	session.mutex.Lock()
@@ -307,29 +282,29 @@ func (sm *SessionManager) UpdateSessionStatus(sessionID string, status protocol.
 		session.ExitTime = &now
 
 		// Debug: Log exit details
-		log.Printf("[DEBUG] Session %s (%s): status %s->%s, exitCode=%d, exitTime=%v", 
-			sessionID, session.Label, oldStatus, status, *exitCode, now)
+		log.Printf("[DEBUG] Session %s: status %s->%s, exitCode=%d, exitTime=%v", 
+			label, oldStatus, status, *exitCode, now)
 
 		// If the connection is also lost, schedule cleanup
 		if session.ConnectionStatus == ConnectionDisconnected {
-			sm.scheduleCleanup(sessionID)
+			sm.scheduleCleanup(label)
 		}
 	} else {
-		log.Printf("[DEBUG] Session %s (%s): status %s->%s, pid=%d", 
-			sessionID, session.Label, oldStatus, status, pid)
+		log.Printf("[DEBUG] Session %s: status %s->%s, pid=%d", 
+			label, oldStatus, status, pid)
 	}
 
 	return nil
 }
 
 // SetConnection sets the WebSocket connection for a session
-func (sm *SessionManager) SetConnection(sessionID string, conn *websocket.Conn) error {
+func (sm *SessionManager) SetConnection(label string, conn *websocket.Conn) error {
 	sm.mutex.RLock()
-	session, exists := sm.sessions[sessionID]
+	session, exists := sm.sessions[label]
 	sm.mutex.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("session not found: %s", sessionID)
+		return fmt.Errorf("session not found: %s", label)
 	}
 
 	session.mutex.Lock()
@@ -342,7 +317,7 @@ func (sm *SessionManager) SetConnection(sessionID string, conn *websocket.Conn) 
 
 	// Cancel any scheduled cleanup since connection is restored
 	sm.mutex.Lock()
-	delete(sm.cleanupScheduled, sessionID)
+	delete(sm.cleanupScheduled, label)
 	session.cleanupScheduled = false
 	sm.mutex.Unlock()
 
@@ -350,13 +325,13 @@ func (sm *SessionManager) SetConnection(sessionID string, conn *websocket.Conn) 
 }
 
 // DisconnectSession marks a session as disconnected
-func (sm *SessionManager) DisconnectSession(sessionID string) error {
+func (sm *SessionManager) DisconnectSession(label string) error {
 	sm.mutex.RLock()
-	session, exists := sm.sessions[sessionID]
+	session, exists := sm.sessions[label]
 	sm.mutex.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("session not found: %s", sessionID)
+		return fmt.Errorf("session not found: %s", label)
 	}
 
 	session.mutex.Lock()
@@ -369,33 +344,33 @@ func (sm *SessionManager) DisconnectSession(sessionID string) error {
 
 	// If the process is also terminated, schedule cleanup
 	if session.processTerminated {
-		sm.scheduleCleanup(sessionID)
+		sm.scheduleCleanup(label)
 	}
 
 	return nil
 }
 
 // scheduleCleanup schedules a session for cleanup after the configured delay
-func (sm *SessionManager) scheduleCleanup(sessionID string) {
+func (sm *SessionManager) scheduleCleanup(label string) {
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
 
 	cleanupTime := time.Now().Add(sm.cleanupDelay)
-	sm.cleanupScheduled[sessionID] = cleanupTime
+	sm.cleanupScheduled[label] = cleanupTime
 
-	if session, exists := sm.sessions[sessionID]; exists {
+	if session, exists := sm.sessions[label]; exists {
 		session.cleanupScheduled = true
 	}
 }
 
 // RemoveSession removes a session from the manager
-func (sm *SessionManager) RemoveSession(sessionID string) error {
+func (sm *SessionManager) RemoveSession(label string) error {
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
 
-	session, exists := sm.sessions[sessionID]
+	session, exists := sm.sessions[label]
 	if !exists {
-		return fmt.Errorf("session not found: %s", sessionID)
+		return fmt.Errorf("session not found: %s", label)
 	}
 
 	// Clean up the session
@@ -409,25 +384,10 @@ func (sm *SessionManager) RemoveSession(sessionID string) error {
 	session.mutex.Unlock()
 
 	// Remove from sessions map
-	delete(sm.sessions, sessionID)
-
-	// Remove from sessionsByLabel map
-	if sessions, exists := sm.sessionsByLabel[session.Label]; exists {
-		// Find and remove the session from the slice
-		for i, s := range sessions {
-			if s.ID == sessionID {
-				sm.sessionsByLabel[session.Label] = append(sessions[:i], sessions[i+1:]...)
-				break
-			}
-		}
-		// Clean up empty label entries
-		if len(sm.sessionsByLabel[session.Label]) == 0 {
-			delete(sm.sessionsByLabel, session.Label)
-		}
-	}
+	delete(sm.sessions, label)
 
 	// Remove from cleanup schedule
-	delete(sm.cleanupScheduled, sessionID)
+	delete(sm.cleanupScheduled, label)
 
 	return nil
 }
@@ -455,18 +415,18 @@ func (sm *SessionManager) performCleanup() {
 	var sessionsToCleanup []string
 
 	sm.mutex.RLock()
-	for sessionID, cleanupTime := range sm.cleanupScheduled {
+	for label, cleanupTime := range sm.cleanupScheduled {
 		if now.After(cleanupTime) {
-			sessionsToCleanup = append(sessionsToCleanup, sessionID)
+			sessionsToCleanup = append(sessionsToCleanup, label)
 		}
 	}
 	sm.mutex.RUnlock()
 
 	// Clean up sessions that are due for cleanup
-	for _, sessionID := range sessionsToCleanup {
-		if err := sm.RemoveSession(sessionID); err != nil {
+	for _, label := range sessionsToCleanup {
+		if err := sm.RemoveSession(label); err != nil {
 			// Log error but continue with cleanup
-			fmt.Printf("Error removing session %s during cleanup: %v\n", sessionID, err)
+			fmt.Printf("Error removing session %s during cleanup: %v\n", label, err)
 		}
 	}
 }
@@ -526,14 +486,14 @@ func (sm *SessionManager) Close() {
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
 
-	for sessionID := range sm.sessions {
-		sm.removeSessionUnsafe(sessionID)
+	for label := range sm.sessions {
+		sm.removeSessionUnsafe(label)
 	}
 }
 
 // removeSessionUnsafe removes a session without locking (internal use)
-func (sm *SessionManager) removeSessionUnsafe(sessionID string) {
-	session, exists := sm.sessions[sessionID]
+func (sm *SessionManager) removeSessionUnsafe(label string) {
+	session, exists := sm.sessions[label]
 	if !exists {
 		return
 	}
@@ -549,19 +509,8 @@ func (sm *SessionManager) removeSessionUnsafe(sessionID string) {
 	session.mutex.Unlock()
 
 	// Remove from maps
-	delete(sm.sessions, sessionID)
-	if sessions, exists := sm.sessionsByLabel[session.Label]; exists {
-		for i, s := range sessions {
-			if s.ID == sessionID {
-				sm.sessionsByLabel[session.Label] = append(sessions[:i], sessions[i+1:]...)
-				break
-			}
-		}
-		if len(sm.sessionsByLabel[session.Label]) == 0 {
-			delete(sm.sessionsByLabel, session.Label)
-		}
-	}
-	delete(sm.cleanupScheduled, sessionID)
+	delete(sm.sessions, label)
+	delete(sm.cleanupScheduled, label)
 }
 
 // SessionManagerStats represents statistics about the session manager
