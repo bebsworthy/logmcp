@@ -1,83 +1,155 @@
-# True End-to-End Testing Results
+# E2E Testing for LogMCP
 
-## Key Finding: "tools/list" MCP Protocol Issue Discovered
+## Overview
 
-**Your original question: "does the mcp server support the request 'tools/list'?"**
+This directory contains end-to-end tests for the LogMCP server that verify the complete MCP protocol implementation and integration between all components.
 
-**Answer: NO - The MCP server does NOT properly support "tools/list" requests.**
+## Test Structure
 
-## Evidence from True E2E Testing
+- `mcp_server_test.go` - Main E2E test file containing:
+  - `TestLogMCPServerDebug` - Verifies MCP server initialization and tools/list functionality
+  - `TestDirectToolCall` - Tests direct MCP tool invocation without listing
 
-### What We Discovered
+- `exploration/` - Directory containing experimental tests and debugging utilities used during development
 
-1. **The MCP server initializes correctly** and responds to "initialize" requests:
-   ```json
-   {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05","capabilities":{"logging":{},"tools":{"listChanged":true}},"serverInfo":{"name":"logmcp","version":"1.0.0"}}}
-   ```
+## Running Tests
 
-2. **"tools/list" requests timeout** - The server never responds to them, confirming they are not implemented.
+```bash
+# Build the binary first
+go build -o logmcp main.go
 
-3. **The mcp-go library may not automatically handle "tools/list"** as we assumed.
+# Run all E2E tests
+go test -v ./internal/e2e
 
-### Comparison: Mock vs Reality
-
-| Test Type | "tools/list" Result | Confidence Level |
-|-----------|-------------------|------------------|
-| **Integration Mock Tests** | ✅ Returns hardcoded tool list | **FALSE CONFIDENCE** - Tests our mock, not reality |
-| **True E2E Tests** | ❌ Timeout - not implemented | **REAL EVIDENCE** - Tests actual server |
-
-## Architecture Lessons Learned
-
-### Why Mock-Based E2E Tests Were Misleading
-
-The original E2E tests used mocks that returned this for "tools/list":
-```go
-case "tools/list":
-    return map[string]interface{}{
-        "tools": [
-            {"name": "list_sessions", "description": "..."},
-            {"name": "get_logs", "description": "..."},
-            // ... more tools
-        ]
-    }
+# Run specific test
+go test -v ./internal/e2e -run TestLogMCPServerDebug
 ```
 
-This gave us **false confidence** that the feature worked, when in reality:
-- The real MCP server doesn't respond to "tools/list" at all
-- The mcp-go library may not implement this automatically
-- Our integration tests were testing our mock implementation, not the real system
+## Test Coverage Requirements
 
-### Value of True E2E Testing
+To achieve comprehensive E2E test coverage, the following tests need to be implemented:
 
-The true E2E tests revealed:
-1. **Real protocol behavior** - we can see exactly what the server sends/receives
-2. **Missing functionality** - "tools/list" is not implemented despite being expected
-3. **Startup behavior** - server outputs startup messages before accepting JSON-RPC
-4. **Integration issues** - gaps between expected and actual MCP protocol implementation
+### MCP Protocol Tests
+- [ ] **Protocol Handshake** - Full initialize/initialized sequence validation
+- [ ] **Error Handling** - Invalid requests, malformed JSON, protocol violations
+- [ ] **Concurrent Requests** - Multiple simultaneous MCP requests
 
-## Test Architecture Summary
+### Tool-Specific Tests
 
-### `/internal/integration_mock/` (Renamed from e2e)
-- **Purpose**: Fast integration tests with mocked MCP responses
-- **Tests**: Framework functionality, log forwarding, process management  
-- **Limitations**: Does NOT test actual MCP protocol implementation
-- **Value**: Quick feedback, reliable CI/CD, framework verification
+#### list_sessions
+- [ ] Empty session list
+- [ ] Multiple active sessions with different statuses
+- [ ] Session metadata accuracy (PID, buffer size, log count)
+- [ ] Sessions with duplicate labels
 
-### `/internal/e2e/` (New True E2E)
-- **Purpose**: True end-to-end testing with real MCP server processes
-- **Tests**: Actual MCP protocol, real JSON-RPC communication
-- **Limitations**: Slower, more complex setup
-- **Value**: Real confidence, catches actual integration bugs
+#### get_logs
+- [ ] Basic log retrieval from single session
+- [ ] Multi-session log aggregation
+- [ ] Pattern filtering with regex
+- [ ] Stream filtering (stdout/stderr/both)
+- [ ] Time-based filtering (since parameter)
+- [ ] Line count limiting
+- [ ] Max results limiting across sessions
+- [ ] Non-existent session handling
 
-## Next Steps
+#### start_process
+- [ ] Basic process startup
+- [ ] Process with custom working directory
+- [ ] Process with environment variables
+- [ ] Process with different restart policies
+- [ ] Long-running process management
+- [ ] Process that exits immediately
+- [ ] Process that crashes
+- [ ] Invalid command handling
 
-1. **Fix the "tools/list" implementation** in the MCP server
-2. **Research mcp-go library** to understand expected tool listing behavior  
-3. **Expand true E2E tests** to cover all MCP protocol endpoints
-4. **Maintain both test types** - integration_mock for speed, e2e for confidence
+#### control_process
+- [ ] Process restart functionality
+- [ ] Signal sending (SIGTERM, SIGKILL, SIGINT, SIGHUP, SIGUSR1, SIGUSR2)
+- [ ] Control of non-existent session
+- [ ] Control of already stopped process
 
-## Summary
+#### terminating process
+- [ ] SIGTERM graceful shutdown verification
+- [ ] SIGKILL force termination
+- [ ] MCP server shutdown with active processes
+- [ ] Process exit code capture
+- [ ] Cleanup of process resources
+- [ ] Termination of hung/zombie processes
 
-Your question exposed a fundamental flaw in our testing approach. The mock-based tests gave false confidence about MCP protocol support, while true E2E testing revealed that "tools/list" is actually not implemented in the real server.
+#### process tree cleanup
+- [ ] Parent process termination kills all children
+- [ ] Bash script spawning subprocesses (e.g., `bash -c "npm start & npm run worker"`)
+- [ ] npm/node process trees with multiple workers
+- [ ] Docker compose process groups
+- [ ] Process groups and session leaders
+- [ ] Orphaned process detection and cleanup
+- [ ] Recursive termination of nested process trees
 
-**This is exactly why true end-to-end testing is essential** - it catches real integration issues that mocks cannot reveal.
+#### send_stdin
+- [ ] Basic stdin forwarding
+- [ ] Multi-line input
+- [ ] Binary data handling
+- [ ] Stdin to non-existent session
+- [ ] Stdin to process without stdin capability
+
+### Integration Tests
+
+#### WebSocket Communication
+- [ ] Runner registration and label assignment
+- [ ] Log streaming from runners
+- [ ] Status updates propagation
+- [ ] Reconnection handling
+- [ ] Multiple concurrent runners
+
+#### Buffer Management
+- [ ] 5MB size limit enforcement
+- [ ] 5-minute time limit enforcement
+- [ ] FIFO eviction behavior
+- [ ] Thread-safe concurrent access
+- [ ] 64KB line limit handling
+
+#### Session Lifecycle
+- [ ] Session creation and cleanup
+- [ ] Disconnection handling (process continues)
+- [ ] 1-hour cleanup after termination
+- [ ] Label conflict resolution
+
+#### Process Runner Mode
+- [ ] `logmcp run` command execution
+- [ ] Stdout/stderr capture
+- [ ] Process exit code handling
+- [ ] Signal forwarding
+
+#### Log Forwarder Mode
+- [ ] File forwarding
+- [ ] Stdin forwarding
+- [ ] Named pipe forwarding
+- [ ] File rotation handling
+- [ ] Large file handling
+
+### Performance Tests
+- [ ] High-volume log ingestion
+- [ ] Many concurrent sessions
+- [ ] Large individual log lines
+- [ ] Memory usage under load
+- [ ] CPU usage optimization
+
+### Resilience Tests
+- [ ] Server restart with active sessions
+- [ ] Network interruption recovery
+- [ ] Resource exhaustion handling
+- [ ] Graceful shutdown
+- [ ] Process cleanup on unexpected server termination
+- [ ] Signal propagation during server shutdown
+
+### Security Tests
+- [ ] Command injection prevention
+- [ ] Path traversal prevention
+- [ ] Resource limit enforcement
+
+## Current Implementation Status
+
+✅ Basic MCP server initialization and tools/list functionality
+✅ Direct tool invocation (list_sessions)
+
+The remaining tests listed above need to be implemented to ensure comprehensive coverage of all LogMCP features and edge cases.

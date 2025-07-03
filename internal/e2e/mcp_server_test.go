@@ -2,6 +2,9 @@ package e2e
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -134,4 +137,30 @@ func TestDirectToolCall(t *testing.T) {
 	}
 
 	t.Logf("Direct tool call succeeded: %+v", result)
+}
+
+// findBinary finds the logmcp binary for E2E testing
+func findBinary() (string, error) {
+	// Get the current working directory (should be project root when running tests)
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("failed to get working directory: %w", err)
+	}
+
+	// Look for the binary in the project root
+	binaryPath := filepath.Join(cwd, "logmcp")
+	if _, err := os.Stat(binaryPath); err == nil {
+		return binaryPath, nil
+	}
+
+	// If not found in current directory, try going up levels to find project root
+	for i := 0; i < 3; i++ {
+		cwd = filepath.Dir(cwd)
+		binaryPath = filepath.Join(cwd, "logmcp")
+		if _, err := os.Stat(binaryPath); err == nil {
+			return binaryPath, nil
+		}
+	}
+
+	return "", fmt.Errorf("logmcp binary not found. Please run 'go build -o logmcp main.go' from project root")
 }
