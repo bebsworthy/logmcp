@@ -718,24 +718,60 @@ func (mcpSrv *MCPServer) startManagedProcess(session *Session, req protocol.Star
 
 		err := cmd.Wait()
 		exitCode := 0
+		var status protocol.SessionStatus
+
 		if err != nil {
 			if exitError, ok := err.(*exec.ExitError); ok {
-				exitCode = exitError.ExitCode()
+				exitCode = exitError.ExitCode() // Will be -1 for signals
+				
+				// Get the underlying wait status for Unix systems
+				if ws, ok := exitError.Sys().(syscall.WaitStatus); ok {
+					if ws.Signaled() {
+						// Process was terminated by a signal
+						sig := ws.Signal()
+						log.Printf("[DEBUG] Process %s (PID %d) terminated by signal: %v", 
+							session.Label, session.PID, sig)
+						
+						// Classify signals
+						switch sig {
+						case syscall.SIGTERM,  // Polite termination request
+						     syscall.SIGINT,   // Ctrl+C
+						     syscall.SIGKILL,  // Force kill
+						     syscall.SIGHUP:   // Hangup
+							status = protocol.StatusStopped
+						default:
+							// Includes SIGSEGV, SIGILL, SIGABRT, SIGFPE, SIGBUS, SIGTRAP, etc.
+							status = protocol.StatusCrashed
+						}
+					} else if ws.Exited() {
+						// Process exited normally with a code
+						exitCode = ws.ExitStatus()
+						if exitCode == 0 {
+							status = protocol.StatusStopped
+						} else {
+							status = protocol.StatusCrashed
+						}
+					}
+				} else {
+					// Fallback for non-Unix systems or when WaitStatus is not available
+					if exitCode == 0 {
+						status = protocol.StatusStopped
+					} else {
+						status = protocol.StatusCrashed
+					}
+				}
 			} else {
+				// Other error types
 				exitCode = 1
+				status = protocol.StatusCrashed
 			}
-		}
-
-		// Debug: Log process completion
-		log.Printf("[DEBUG] Process %s (PID %d) completed with exit code %d, err: %v", session.Label, session.PID, exitCode, err)
-
-		// Update session status
-		var status protocol.SessionStatus
-		if exitCode == 0 {
-			status = protocol.StatusStopped
 		} else {
-			status = protocol.StatusCrashed
+			// No error, clean exit
+			status = protocol.StatusStopped
 		}
+
+		log.Printf("[DEBUG] Process %s (PID %d) completed with exit code %d, status: %s", 
+			session.Label, session.PID, exitCode, status)
 
 		mcpSrv.sessionManager.UpdateSessionStatus(session.ID, status, session.PID, &exitCode)
 	}()
