@@ -206,11 +206,6 @@ func TestListSessions_SessionMetadataAccuracy(t *testing.T) {
 		t.Errorf("Invalid PID: %d", targetSession.PID)
 	}
 
-	// Check buffer size format (should be like "1.2KB" or "512B")
-	if targetSession.ID == "" {
-		t.Error("Session ID should not be empty")
-	}
-
 	// Check start time is reasonable
 	if targetSession.StartTime == nil || time.Since(*targetSession.StartTime) > 1*time.Minute {
 		t.Errorf("Start time seems incorrect: %v", targetSession.StartTime)

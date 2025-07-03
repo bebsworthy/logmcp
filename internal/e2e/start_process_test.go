@@ -141,7 +141,7 @@ func TestStartProcess_EnvironmentVariables(t *testing.T) {
 	// Start a process that prints environment variables
 	command := "sh"
 	args := []string{"-c", "echo TEST_VAR1=$TEST_VAR1; echo TEST_VAR2=$TEST_VAR2; echo TEST_PATH=$TEST_PATH"}
-	
+
 	if runtime.GOOS == "windows" {
 		command = "cmd"
 		args = []string{"/c", "echo TEST_VAR1=%TEST_VAR1% && echo TEST_VAR2=%TEST_VAR2% && echo TEST_PATH=%TEST_PATH%"}
@@ -179,7 +179,6 @@ func TestStartProcess_EnvironmentVariables(t *testing.T) {
 		t.Fatalf("Failed to get logs: %v", err)
 	}
 
-
 	// Verify environment variables were set
 	expectedVars := map[string]string{
 		"TEST_VAR1": "value1",
@@ -209,10 +208,10 @@ func TestStartProcess_RestartPolicies(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		name           string
-		restartPolicy  string
-		expectRestart  bool
-		crashApp       bool
+		name          string
+		restartPolicy string
+		expectRestart bool
+		crashApp      bool
 	}{
 		{
 			name:          "never-policy-normal-exit",
@@ -262,7 +261,7 @@ func TestStartProcess_RestartPolicies(t *testing.T) {
 			// Prepare command based on test case
 			var command string
 			var args []string
-			
+
 			if tc.crashApp {
 				// Use crash app with short delay
 				command = "go"
@@ -500,7 +499,6 @@ func TestStartProcess_CrashingProcess(t *testing.T) {
 		t.Fatalf("Failed to get logs: %v", err)
 	}
 
-
 	foundError := false
 	foundExitMessage := false
 	for _, log := range logs {
@@ -536,7 +534,7 @@ func TestStartProcess_CrashingProcess(t *testing.T) {
 				exitCodeValue = fmt.Sprintf("%d", *s.ExitCode)
 			}
 			t.Logf("Session details: status=%s, exitCode=%s, pid=%d", s.Status, exitCodeValue, s.PID)
-			
+
 			if s.Status != "crashed" {
 				t.Errorf("Expected status 'crashed', got '%s'", s.Status)
 			}
@@ -748,7 +746,7 @@ func TestStartProcess_ComplexCommand(t *testing.T) {
 	// Test command with pipes and redirects
 	command := "sh"
 	args := []string{"-c", "echo 'Line 1' && echo 'Error line' >&2 && echo 'Line 2'"}
-	
+
 	if runtime.GOOS == "windows" {
 		command = "cmd"
 		args = []string{"/c", "echo Line 1 && echo Error line 1>&2 && echo Line 2"}
@@ -772,7 +770,7 @@ func TestStartProcess_ComplexCommand(t *testing.T) {
 	foundLine1 := false
 	foundLine2 := false
 	foundError := false
-	
+
 	for _, log := range logs {
 		if strings.Contains(log.Content, "Line 1") {
 			foundLine1 = true
@@ -828,12 +826,12 @@ func TestStartProcess_ProcessWithChildren(t *testing.T) {
 	// Count unique child messages
 	childMessages := make(map[string]bool)
 	parentFound := false
-	
+
 	for _, log := range logs {
-		if strings.Contains(log.Content, "Parent process running") {
+		if strings.Contains(log.Content, "Parent process started") {
 			parentFound = true
 		}
-		if strings.Contains(log.Content, "Child") && strings.Contains(log.Content, "running") {
+		if strings.Contains(log.Content, "Child") && strings.Contains(log.Content, "started with PID") {
 			childMessages[log.Content] = true
 		}
 	}
@@ -861,7 +859,7 @@ func TestStartProcess_ProcessWithChildren(t *testing.T) {
 	// Verify children were also terminated (check logs stopped coming)
 	initialLogCount := len(logs)
 	time.Sleep(2 * time.Second)
-	
+
 	logs2, err := ts.GetLogs([]string{"parent-process"})
 	if err != nil {
 		t.Fatalf("Failed to get logs after stop: %v", err)

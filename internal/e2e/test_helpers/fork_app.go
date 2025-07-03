@@ -12,7 +12,7 @@ import (
 func main() {
 	// Print startup diagnostics
 	fmt.Printf("STARTED: fork_app with args: %v\n", os.Args[1:])
-	
+
 	// App that creates child processes
 	numChildren := 2
 	if len(os.Args) > 1 {
@@ -46,6 +46,7 @@ func main() {
 
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
+		// cmd.Stdin = os.Stdin
 
 		if err := cmd.Start(); err != nil {
 			log.Printf("Failed to start child %d: %v", childNum, err)
