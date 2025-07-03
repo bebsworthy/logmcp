@@ -675,6 +675,9 @@ func (mcpSrv *MCPServer) startManagedProcess(session *Session, req protocol.Star
 	session.Status = protocol.StatusRunning
 	session.mutex.Unlock()
 
+	// Debug: Log process start
+	log.Printf("[DEBUG] Started process %s (PID %d) with command: %s %v", session.Label, cmd.Process.Pid, req.Command, req.Arguments)
+
 	// Start goroutines to read stdout/stderr
 	mcpSrv.wg.Add(3)
 
@@ -722,6 +725,9 @@ func (mcpSrv *MCPServer) startManagedProcess(session *Session, req protocol.Star
 				exitCode = 1
 			}
 		}
+
+		// Debug: Log process completion
+		log.Printf("[DEBUG] Process %s (PID %d) completed with exit code %d, err: %v", session.Label, session.PID, exitCode, err)
 
 		// Update session status
 		var status protocol.SessionStatus

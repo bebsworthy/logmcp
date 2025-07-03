@@ -35,6 +35,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"sync"
 	"time"
@@ -290,6 +291,8 @@ func (sm *SessionManager) UpdateSessionStatus(sessionID string, status protocol.
 	session.mutex.Lock()
 	defer session.mutex.Unlock()
 
+	// Debug: Log status change
+	oldStatus := session.Status
 	session.Status = status
 	session.lastActivityTime = time.Now()
 
@@ -303,10 +306,17 @@ func (sm *SessionManager) UpdateSessionStatus(sessionID string, status protocol.
 		now := time.Now()
 		session.ExitTime = &now
 
+		// Debug: Log exit details
+		log.Printf("[DEBUG] Session %s (%s): status %s->%s, exitCode=%d, exitTime=%v", 
+			sessionID, session.Label, oldStatus, status, *exitCode, now)
+
 		// If the connection is also lost, schedule cleanup
 		if session.ConnectionStatus == ConnectionDisconnected {
 			sm.scheduleCleanup(sessionID)
 		}
+	} else {
+		log.Printf("[DEBUG] Session %s (%s): status %s->%s, pid=%d", 
+			sessionID, session.Label, oldStatus, status, pid)
 	}
 
 	return nil

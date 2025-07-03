@@ -502,21 +502,24 @@ func TestStartProcess_CrashingProcess(t *testing.T) {
 
 
 	foundError := false
-	foundPanic := false
+	foundExitMessage := false
 	for _, log := range logs {
-		if strings.Contains(log.Content, "CRITICAL ERROR") {
+		// Look for actual error messages the crash app produces
+		if strings.Contains(log.Content, "Fatal error occurred!") || strings.Contains(log.Content, "CRASH!") {
 			foundError = true
 		}
-		if strings.Contains(log.Content, "panic:") {
-			foundPanic = true
+		if strings.Contains(log.Content, "EXITING: crash_app with code: 42") {
+			foundExitMessage = true
 		}
+		// Debug: Print what we actually got
+		t.Logf("Log content: %s", log.Content)
 	}
 
 	if !foundError {
-		t.Error("Did not find expected error message in logs")
+		t.Error("Did not find error message in logs")
 	}
-	if !foundPanic {
-		t.Error("Did not find panic message in logs")
+	if !foundExitMessage {
+		t.Error("Did not find exit message in logs")
 	}
 
 	// Verify exit code
@@ -527,13 +530,21 @@ func TestStartProcess_CrashingProcess(t *testing.T) {
 
 	for _, s := range sessions {
 		if s.Label == "crash-test" {
+			// Debug: Print session details
+			exitCodeValue := "nil"
+			if s.ExitCode != nil {
+				exitCodeValue = fmt.Sprintf("%d", *s.ExitCode)
+			}
+			t.Logf("Session details: status=%s, exitCode=%s, pid=%d", s.Status, exitCodeValue, s.PID)
+			
 			if s.Status != "crashed" {
 				t.Errorf("Expected status 'crashed', got '%s'", s.Status)
 			}
 			if s.ExitCode == nil {
 				t.Error("Exit code should be set for crashed process")
-			} else if *s.ExitCode != 42 {
-				t.Errorf("Expected exit code 42, got %d", *s.ExitCode)
+			} else if *s.ExitCode != 1 {
+				// Note: When using 'go run', the exit code is 1 for any non-zero exit from the child
+				t.Errorf("Expected exit code 1 (from go run), got %d", *s.ExitCode)
 			}
 			break
 		}

@@ -422,7 +422,7 @@ func (ts *TestServer) ListSessions() ([]Session, error) {
 					Status    string     `json:"status"`
 					PID       int        `json:"pid,omitempty"`
 					StartTime *time.Time `json:"start_time,omitempty"`
-					EndTime   *time.Time `json:"end_time,omitempty"`
+					EndTime   *time.Time `json:"exit_time,omitempty"`
 					ExitCode  *int       `json:"exit_code,omitempty"`
 				} `json:"sessions"`
 			} `json:"data"`

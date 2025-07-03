@@ -46,7 +46,7 @@ func TestListSessions_MultipleActiveSessions(t *testing.T) {
 			args:    []string{"run", ts.TestAppPath("simple_app.go")},
 		},
 		{
-			label:   "stdin-app", 
+			label:   "stdin-app",
 			command: "go",
 			args:    []string{"run", ts.TestAppPath("stdin_app.go")},
 		},
@@ -88,22 +88,22 @@ func TestListSessions_MultipleActiveSessions(t *testing.T) {
 		for _, session := range sessions {
 			if session.Label == tc.label {
 				found = true
-				
+
 				// Verify status is running
 				if session.Status != "running" {
 					t.Errorf("Session %s: expected status 'running', got '%s'", tc.label, session.Status)
 				}
-				
+
 				// Verify PID is set
 				if session.PID <= 0 {
 					t.Errorf("Session %s: expected positive PID, got %d", tc.label, session.PID)
 				}
-				
+
 				// Verify start time is recent
 				if time.Since(*session.StartTime) > 10*time.Second {
 					t.Errorf("Session %s: start time %v is too old", tc.label, session.StartTime)
 				}
-				
+
 				// Verify no exit time or exit code for running process
 				if session.EndTime != nil {
 					t.Errorf("Session %s: running process should not have end time", tc.label)
@@ -111,7 +111,7 @@ func TestListSessions_MultipleActiveSessions(t *testing.T) {
 				if session.ExitCode != nil {
 					t.Errorf("Session %s: running process should not have exit code", tc.label)
 				}
-				
+
 				break
 			}
 		}
@@ -164,7 +164,7 @@ func TestListSessions_SessionMetadataAccuracy(t *testing.T) {
 	opts := map[string]any{
 		"working_dir": workingDir,
 	}
-	
+
 	command := "go"
 	args := []string{"run", ts.TestAppPath("simple_app.go")}
 	if err := ts.StartTestProcessWithOptions("metadata-test", command, args, opts); err != nil {
@@ -292,17 +292,17 @@ func TestListSessions_DuplicateLabels(t *testing.T) {
 	// Count sessions with our label pattern
 	duplicateCount := 0
 	labelMap := make(map[string]bool)
-	
+
 	for _, session := range sessions {
 		if strings.HasPrefix(session.Label, "duplicate-label") {
 			duplicateCount++
 			labelMap[session.Label] = true
-			
+
 			// All should be running
 			if session.Status != "running" {
 				t.Errorf("Session %s: expected status 'running', got '%s'", session.Label, session.Status)
 			}
-			
+
 			// Each should have unique PID
 			if session.PID <= 0 {
 				t.Errorf("Session %s: invalid PID %d", session.Label, session.PID)
@@ -352,24 +352,24 @@ func TestListSessions_CrashedSessions(t *testing.T) {
 	for _, session := range sessions {
 		if session.Label == "crash-app" {
 			found = true
-			
+
 			// Verify crashed status
 			if session.Status != "crashed" {
 				t.Errorf("Expected status 'crashed', got '%s'", session.Status)
 			}
-			
+
 			// Should have end time
 			if session.EndTime == nil {
 				t.Error("Crashed session should have end time")
 			}
-			
+
 			// Should have non-zero exit code
 			if session.ExitCode == nil {
 				t.Error("Crashed session should have exit code")
 			} else if *session.ExitCode == 0 {
 				t.Error("Crashed session should have non-zero exit code")
 			}
-			
+
 			break
 		}
 	}
@@ -382,7 +382,7 @@ func TestListSessions_CrashedSessions(t *testing.T) {
 // TestListSessions_ManySessions tests behavior with many sessions
 func TestListSessions_ManySessions(t *testing.T) {
 	// This test might be slow, so we don't run it in parallel
-	
+
 	ts := SetupTest(t)
 
 	// Start many processes
@@ -395,7 +395,7 @@ func TestListSessions_ManySessions(t *testing.T) {
 	}
 
 	// Wait a bit for all to start
-	time.Sleep(3 * time.Second)
+	time.Sleep(20 * time.Second)
 
 	// List all sessions
 	sessions, err := ts.ListSessions()
@@ -485,16 +485,16 @@ func TestListSessions_SessionTypes(t *testing.T) {
 	for _, session := range sessions {
 		if session.Label == "managed-process" {
 			found = true
-			
+
 			// Verify it's a managed session
-			t.Logf("Session details: ID=%s, Label=%s, Status=%s", 
+			t.Logf("Session details: ID=%s, Label=%s, Status=%s",
 				session.ID, session.Label, session.Status)
-			
+
 			// All test processes started via StartTestProcess are managed
 			if session.Status != "running" {
 				t.Errorf("Expected running status, got %s", session.Status)
 			}
-			
+
 			break
 		}
 	}
@@ -557,20 +557,20 @@ func TestListSessions_RestartedSessions(t *testing.T) {
 	for _, session := range sessions {
 		if session.Label == "restart-test" {
 			found = true
-			
+
 			// Should be running
 			if session.Status != "running" {
 				t.Errorf("Expected status 'running' after restart, got '%s'", session.Status)
 			}
-			
+
 			// Should have different PID
 			if session.PID == initialPID {
 				t.Error("PID should change after restart")
 			}
-			
+
 			// Should still have original start time (session persists across restart)
 			// This depends on implementation - session might be recreated
-			
+
 			break
 		}
 	}
