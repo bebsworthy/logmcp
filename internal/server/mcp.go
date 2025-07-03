@@ -34,7 +34,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -131,6 +130,12 @@ func (mcpSrv *MCPServer) registerTools() {
 			mcp.WithString("command",
 				mcp.Required(),
 				mcp.Description("Command to execute"),
+			),
+			mcp.WithArray("arguments",
+				mcp.Description("Command arguments"),
+				mcp.Items(map[string]interface{}{
+					"type": "string",
+				}),
 			),
 			mcp.WithString("label",
 				mcp.Required(),
@@ -486,6 +491,18 @@ func (mcpSrv *MCPServer) handleStartProcess(ctx context.Context, request mcp.Cal
 	}
 	req.Command = command
 
+	// Extract arguments array
+	if argsArray, ok := args["arguments"].([]interface{}); ok {
+		req.Arguments = make([]string, len(argsArray))
+		for i, arg := range argsArray {
+			if strArg, ok := arg.(string); ok {
+				req.Arguments[i] = strArg
+			} else {
+				return nil, fmt.Errorf("argument at index %d must be a string", i)
+			}
+		}
+	}
+
 	label, ok := args["label"].(string)
 	if !ok {
 		return nil, fmt.Errorf("label parameter is required")
@@ -535,6 +552,7 @@ func (mcpSrv *MCPServer) handleStartProcess(ctx context.Context, request mcp.Cal
 	// Create managed args
 	managedArgs := protocol.ManagedArgs{
 		Command:     req.Command,
+		Arguments:   req.Arguments,
 		Label:       req.Label,
 		WorkingDir:  *req.WorkingDir,
 		Environment: req.Environment,
@@ -618,14 +636,8 @@ func (mcpSrv *MCPServer) handleStartProcess(ctx context.Context, request mcp.Cal
 
 // startManagedProcess starts a managed process for a session
 func (mcpSrv *MCPServer) startManagedProcess(session *Session, req protocol.StartProcessRequest) error {
-	// Parse command into parts
-	parts := strings.Fields(req.Command)
-	if len(parts) == 0 {
-		return fmt.Errorf("empty command")
-	}
-
-	// Create command
-	cmd := exec.Command(parts[0], parts[1:]...)
+	// Create command with arguments
+	cmd := exec.Command(req.Command, req.Arguments...)
 	cmd.Dir = *req.WorkingDir
 
 	// Set environment
@@ -857,6 +869,7 @@ func (mcp *MCPServer) restartProcess(session *Session) (string, error) {
 	// Create restart request
 	req := protocol.StartProcessRequest{
 		Command:     managedArgs.Command,
+		Arguments:   managedArgs.Arguments,
 		Label:       managedArgs.Label,
 		WorkingDir:  &managedArgs.WorkingDir,
 		Environment: managedArgs.Environment,

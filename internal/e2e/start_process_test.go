@@ -152,14 +152,33 @@ func TestStartProcess_EnvironmentVariables(t *testing.T) {
 		t.Fatalf("Failed to start process: %v", err)
 	}
 
+	// Check if process started
+	sessions, err := ts.ListSessions()
+	if err != nil {
+		t.Fatalf("Failed to list sessions: %v", err)
+	}
+	t.Logf("Sessions after start: %d sessions", len(sessions))
+	for _, s := range sessions {
+		t.Logf("  Session %s: status=%s, pid=%d", s.Label, s.Status, s.PID)
+	}
+
 	// Wait for process to complete
-	time.Sleep(2 * time.Second)
+	time.Sleep(3 * time.Second)
+
+	// Check final session status
+	sessions2, _ := ts.ListSessions()
+	for _, s := range sessions2 {
+		if s.Label == "env-test" {
+			t.Logf("Final session status: %s, pid=%d, exit_code=%v", s.Status, s.PID, s.ExitCode)
+		}
+	}
 
 	// Get logs
 	logs, err := ts.GetLogs([]string{"env-test"})
 	if err != nil {
 		t.Fatalf("Failed to get logs: %v", err)
 	}
+
 
 	// Verify environment variables were set
 	expectedVars := map[string]string{
@@ -480,6 +499,7 @@ func TestStartProcess_CrashingProcess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get logs: %v", err)
 	}
+
 
 	foundError := false
 	foundPanic := false

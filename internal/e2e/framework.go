@@ -247,15 +247,10 @@ func (ts *TestServer) StartTestProcess(label, command string, args ...string) er
 	callRequest := mcp.CallToolRequest{}
 	callRequest.Params.Name = "start_process"
 	
-	// Combine command and args into a single string
-	fullCommand := command
-	if len(args) > 0 {
-		fullCommand = fmt.Sprintf("%s %s", command, strings.Join(args, " "))
-	}
-	
 	arguments := map[string]any{
-		"label":   label,
-		"command": fullCommand,
+		"label":     label,
+		"command":   command,
+		"arguments": args,
 	}
 
 	callRequest.Params.Arguments = arguments
@@ -272,15 +267,10 @@ func (ts *TestServer) StartTestProcessWithOptions(label, command string, args []
 	callRequest := mcp.CallToolRequest{}
 	callRequest.Params.Name = "start_process"
 	
-	// Combine command and args into a single string
-	fullCommand := command
-	if len(args) > 0 {
-		fullCommand = fmt.Sprintf("%s %s", command, strings.Join(args, " "))
-	}
-	
 	arguments := map[string]any{
-		"label":   label,
-		"command": fullCommand,
+		"label":     label,
+		"command":   command,
+		"arguments": args,
 	}
 
 	// Add additional options
@@ -289,6 +279,7 @@ func (ts *TestServer) StartTestProcessWithOptions(label, command string, args []
 	}
 
 	callRequest.Params.Arguments = arguments
+	
 
 	ctx, cancel := context.WithTimeout(ts.ctx, 10*time.Second)
 	defer cancel()
@@ -341,6 +332,9 @@ func (ts *TestServer) GetLogs(labels []string, opts ...LogOption) ([]LogEntry, e
 			}
 		}
 
+		// Debug: log raw content
+		ts.t.Logf("GetLogs raw textContent: %s", textContent)
+		
 		// Parse the JSON response - the server returns a wrapped response
 		var response struct {
 			Success bool `json:"success"`

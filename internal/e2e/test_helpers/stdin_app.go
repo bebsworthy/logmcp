@@ -9,6 +9,9 @@ import (
 )
 
 func main() {
+	// Print startup diagnostics
+	fmt.Printf("STARTED: stdin_app with args: %v\n", os.Args[1:])
+	
 	// App that reads from stdin and logs the input
 	log.Println("Stdin app started")
 	fmt.Println("Ready to receive input. Type 'quit' to exit.")

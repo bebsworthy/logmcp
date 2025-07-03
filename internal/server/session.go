@@ -102,6 +102,7 @@ type ForwardArgs struct {
 
 type ManagedArgs struct {
 	Command     string            `json:"command"`
+	Arguments   []string          `json:"arguments"`
 	Label       string            `json:"label"`
 	WorkingDir  string            `json:"working_dir"`
 	Environment map[string]string `json:"environment"`

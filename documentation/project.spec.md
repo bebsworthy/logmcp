@@ -45,7 +45,7 @@ The following commands are available to LLMs through the MCP interface:
 
 - **list_sessions** - Get a list of all active log sessions with their status, process information, and buffer statistics
 - **get_logs** - Retrieve and search log entries from one or more sessions, with options to filter by time range, line count, stream type (stdout/stderr), and regex patterns
-- **start_process** - Launch a new managed process with specified command, working directory, environment variables, restart policies, and optional startup log collection
+- **start_process** - Launch a new managed process with specified command and arguments array, working directory, environment variables, restart policies, and optional startup log collection
 - **control_process** - Send control commands to managed processes (restart, signal) with specific signal names (SIGTERM, SIGKILL)
 - **send_stdin** - Send input directly to a process's stdin for interactive commands or configuration
 
@@ -317,6 +317,45 @@ The following tools are available to LLMs through the MCP interface:
     "time_range": {
       "oldest": "2025-06-30T10:30:15.123Z",
       "newest": "2025-06-30T10:30:17.789Z"
+    }
+  }
+}
+```
+
+#### `start_process`
+```json
+{
+  "name": "start_process",
+  "description": "Launch a new managed process",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "command": {"type": "string", "description": "Command to execute"},
+      "arguments": {"type": "array", "items": {"type": "string"}, "description": "Command arguments"},
+      "label": {"type": "string", "description": "Label for the process session"},
+      "working_dir": {"type": "string", "description": "Working directory"},
+      "environment": {"type": "object", "description": "Environment variables"},
+      "restart_policy": {"type": "string", "enum": ["never", "always", "on-failure"], "description": "Restart policy"},
+      "collect_startup_logs": {"type": "boolean", "description": "Collect startup logs"}
+    },
+    "required": ["command", "label"]
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "message": "Process started successfully",
+    "session": {
+      "label": "backend",
+      "status": "running",
+      "pid": 1234,
+      "command": "npm",
+      "working_dir": "/app/backend",
+      "start_time": "2025-06-30T10:30:00Z"
     }
   }
 }

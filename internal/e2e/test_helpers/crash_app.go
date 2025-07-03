@@ -8,6 +8,9 @@ import (
 )
 
 func main() {
+	// Print startup diagnostics
+	fmt.Printf("STARTED: crash_app with args: %v\n", os.Args[1:])
+	
 	// App that crashes after a delay
 	delay := 2 * time.Second
 	if len(os.Args) > 1 {
@@ -31,5 +34,6 @@ func main() {
 
 	log.Printf("CRASH! Exiting with code %d", exitCode)
 	fmt.Fprintln(os.Stderr, "Fatal error occurred!")
+	fmt.Printf("EXITING: crash_app with code: %d\n", exitCode)
 	os.Exit(exitCode)
 }

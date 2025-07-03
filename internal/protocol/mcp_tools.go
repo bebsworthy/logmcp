@@ -82,6 +82,13 @@ func GetMCPTools() []MCPTool {
 						"type":        "string",
 						"description": "Command to execute",
 					},
+					"arguments": map[string]interface{}{
+						"type":        "array",
+						"description": "Command arguments",
+						"items": map[string]interface{}{
+							"type": "string",
+						},
+					},
 					"label": map[string]interface{}{
 						"type":        "string",
 						"description": "Label for the process session",
@@ -231,6 +238,7 @@ type TimeRange struct {
 // StartProcessRequest represents a request to start a process
 type StartProcessRequest struct {
 	Command            string            `json:"command" validate:"required"`
+	Arguments          []string          `json:"arguments,omitempty"`
 	Label              string            `json:"label" validate:"required"`
 	WorkingDir         *string           `json:"working_dir,omitempty"`
 	Environment        map[string]string `json:"environment,omitempty"`
@@ -302,6 +310,7 @@ type ForwardArgs struct {
 // ManagedArgs represents arguments for managed mode
 type ManagedArgs struct {
 	Command     string            `json:"command"`
+	Arguments   []string          `json:"arguments"`
 	Label       string            `json:"label"`
 	WorkingDir  string            `json:"working_dir"`
 	Environment map[string]string `json:"environment"`

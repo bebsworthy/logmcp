@@ -8,6 +8,17 @@ import (
 )
 
 func main() {
+	// Print startup diagnostics
+	fmt.Printf("STARTED: simple_app with args: %v\n", os.Args[1:])
+	
+	// Print environment variables for debugging
+	fmt.Println("Environment variables:")
+	for _, env := range os.Environ() {
+		if len(env) >= 4 && (env[0:4] == "TEST" || env[0:4] == "TICK") {
+			fmt.Printf("  %s\n", env)
+		}
+	}
+	
 	// Simple app that logs periodically
 	interval := 1 * time.Second
 	if len(os.Args) > 1 {
