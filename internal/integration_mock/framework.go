@@ -32,6 +32,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/logmcp/logmcp/internal/server"
 )
 
@@ -295,7 +296,7 @@ func (c *MockMCPClient) callMCPServerDirectly(method string, params interface{},
 			"jsonrpc": "2.0",
 			"id":      reqID,
 			"result": map[string]interface{}{
-				"protocolVersion": "2024-11-05",
+				"protocolVersion": mcp.LATEST_PROTOCOL_VERSION,
 				"capabilities": map[string]interface{}{
 					"tools": map[string]interface{}{},
 				},

@@ -3,6 +3,8 @@ package e2e
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/mark3labs/mcp-go/mcp"
 )
 
 // TestMCPProtocolBasics tests the basic MCP protocol functionality with real server
@@ -21,7 +23,7 @@ func TestMCPProtocolBasics(t *testing.T) {
 	// Test 1: Initialize the MCP connection
 	t.Run("Initialize", func(t *testing.T) {
 		response, err := suite.SendMCPRequest("initialize", map[string]interface{}{
-			"protocolVersion": "2024-11-05",
+			"protocolVersion": mcp.LATEST_PROTOCOL_VERSION,
 			"capabilities":    map[string]interface{}{},
 			"clientInfo": map[string]interface{}{
 				"name":    "e2e-test-client",
@@ -60,7 +62,7 @@ func TestMCPProtocolBasics(t *testing.T) {
 	t.Run("ToolsList", func(t *testing.T) {
 		// Initialize first
 		_, err := suite.SendMCPRequest("initialize", map[string]interface{}{
-			"protocolVersion": "2024-11-05",
+			"protocolVersion": mcp.LATEST_PROTOCOL_VERSION,
 			"capabilities":    map[string]interface{}{},
 			"clientInfo": map[string]interface{}{
 				"name":    "e2e-test-client",
@@ -89,7 +91,7 @@ func TestMCPProtocolBasics(t *testing.T) {
 		// The actual response format appears to be different from expected
 		// Let's just verify we got a valid response and log what we received
 		t.Logf("tools/list response: %+v", result)
-		
+
 		// Check if we have capabilities indicating tools support
 		capabilities, ok := result["capabilities"].(map[string]interface{})
 		if ok {
@@ -97,7 +99,7 @@ func TestMCPProtocolBasics(t *testing.T) {
 				t.Logf("Server tools capabilities: %+v", toolsCap)
 			}
 		}
-		
+
 		// For now, just verify we got a valid response structure
 		// TODO: Research the actual MCP protocol specification for tools/list format
 	})
@@ -175,7 +177,7 @@ func TestMCPProtocolStartProcess(t *testing.T) {
 
 	// Initialize first
 	_, err = suite.SendMCPRequest("initialize", map[string]interface{}{
-		"protocolVersion": "2024-11-05",
+		"protocolVersion": mcp.LATEST_PROTOCOL_VERSION,
 		"capabilities":    map[string]interface{}{},
 		"clientInfo": map[string]interface{}{
 			"name":    "e2e-test-client",

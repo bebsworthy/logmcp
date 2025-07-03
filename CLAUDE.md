@@ -110,7 +110,7 @@ Used to indicate that I have answered the questions or issue raised in `open-que
 
 All the documentation for the project is available in ./documentation/ 
 
-- [project.spec.md - The overview of the project](./documentation/project.specs.md) **ALWAYS READ THIS FILE**
+- [project.spec.md - The overview of the project](./documentation/project.spec.md) **ALWAYS READ THIS FILE**
   
 **Others files pattern**
  * `*.feat.md`: Technical specification about a specific feature (usually under development or preparation). **ALWAYS READ THIS FILE IF MENTIONNED IN THE CURRENT TASK or read as needed**

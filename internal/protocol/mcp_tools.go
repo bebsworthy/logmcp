@@ -56,9 +56,8 @@ func GetMCPTools() []MCPTool {
 					},
 					"stream": map[string]interface{}{
 						"type":        "string",
-						"enum":        []string{"stdout", "stderr", "both"},
 						"default":     "both",
-						"description": "Filter by stream type",
+						"description": "Filter by stream type: stdout, stderr, or both",
 					},
 					"pattern": map[string]interface{}{
 						"type":        "string",
@@ -100,9 +99,8 @@ func GetMCPTools() []MCPTool {
 					},
 					"restart_policy": map[string]interface{}{
 						"type":        "string",
-						"enum":        []string{"never", "on-failure", "always"},
 						"default":     "never",
-						"description": "Process restart policy",
+						"description": "Process restart policy: never, on-failure, or always",
 					},
 					"collect_startup_logs": map[string]interface{}{
 						"type":        "boolean",
@@ -125,13 +123,11 @@ func GetMCPTools() []MCPTool {
 					},
 					"action": map[string]interface{}{
 						"type":        "string",
-						"enum":        []string{"restart", "signal"},
-						"description": "Action to perform",
+						"description": "Action to perform: restart or signal",
 					},
 					"signal": map[string]interface{}{
 						"type":        "string",
-						"enum":        []string{"SIGTERM", "SIGKILL", "SIGINT", "SIGHUP", "SIGUSR1", "SIGUSR2"},
-						"description": "Signal to send (required for signal action)",
+						"description": "Signal to send (required for signal action): SIGTERM, SIGKILL, SIGINT, SIGHUP, SIGUSR1, or SIGUSR2",
 					},
 				},
 				"required": []string{"label", "action"},
