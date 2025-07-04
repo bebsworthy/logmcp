@@ -547,11 +547,12 @@ func (mcpSrv *MCPServer) handleStartProcess(ctx context.Context, request mcp.Cal
 
 	// Create managed args
 	managedArgs := protocol.ManagedArgs{
-		Command:     req.Command,
-		Arguments:   req.Arguments,
-		Label:       req.Label,
-		WorkingDir:  *req.WorkingDir,
-		Environment: req.Environment,
+		Command:       req.Command,
+		Arguments:     req.Arguments,
+		Label:         req.Label,
+		WorkingDir:    *req.WorkingDir,
+		Environment:   req.Environment,
+		RestartPolicy: *req.RestartPolicy,
 	}
 
 	// Create session
@@ -781,6 +782,42 @@ func (mcpSrv *MCPServer) startManagedProcess(session *Session, req protocol.Star
 			session.Label, session.PID, exitCode, status)
 
 		mcpSrv.sessionManager.UpdateSessionStatus(session.Label, status, session.PID, &exitCode)
+
+		// Check restart policy
+		session.mutex.RLock()
+		managedArgs, isManagedProcess := session.RunnerArgs.(protocol.ManagedArgs)
+		session.mutex.RUnlock()
+
+		if isManagedProcess && managedArgs.RestartPolicy != "" {
+			shouldRestart := false
+			
+			switch managedArgs.RestartPolicy {
+			case "always":
+				shouldRestart = true
+				log.Printf("[DEBUG] Process %s will restart (policy: always)", session.Label)
+			case "on-failure":
+				if exitCode != 0 {
+					shouldRestart = true
+					log.Printf("[DEBUG] Process %s will restart (policy: on-failure, exit code: %d)", 
+						session.Label, exitCode)
+				}
+			case "never":
+				// Do nothing
+				log.Printf("[DEBUG] Process %s will not restart (policy: never)", session.Label)
+			}
+
+			if shouldRestart {
+				// Small delay before restart to avoid tight loops
+				time.Sleep(1 * time.Second)
+				
+				// Trigger restart
+				if _, err := mcpSrv.restartProcess(session); err != nil {
+					log.Printf("[ERROR] Failed to restart process %s: %v", session.Label, err)
+					// Update status to crashed if restart fails
+					mcpSrv.sessionManager.UpdateSessionStatus(session.Label, protocol.StatusCrashed, 0, nil)
+				}
+			}
+		}
 	}()
 
 	return nil
@@ -920,11 +957,12 @@ func (mcp *MCPServer) restartProcess(session *Session) (string, error) {
 
 	// Make a copy of args to use after unlocking
 	req := protocol.StartProcessRequest{
-		Command:     managedArgs.Command,
-		Arguments:   managedArgs.Arguments,
-		Label:       managedArgs.Label,
-		WorkingDir:  &managedArgs.WorkingDir,
-		Environment: managedArgs.Environment,
+		Command:       managedArgs.Command,
+		Arguments:     managedArgs.Arguments,
+		Label:         managedArgs.Label,
+		WorkingDir:    &managedArgs.WorkingDir,
+		Environment:   managedArgs.Environment,
+		RestartPolicy: &managedArgs.RestartPolicy,
 	}
 
 	// Unlock before killing process (which might block)
