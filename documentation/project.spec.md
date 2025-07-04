@@ -153,48 +153,6 @@ logmcp forward [--label LABEL] [--server-url URL] <source>
   "message": "Cannot send signal to non-existent process",
   "details": {}
 }
-```#### Status Message (Runner → Server)
-```json
-{
-  "type": "status",
-  "label": "backend",
-  "status": "running|stopped|crashed|restarting",
-  "pid": 1234,
-  "exit_code": null,
-  "message": "Process restarted successfully"
-}
-```
-
-#### Session Registration (Runner → Server)
-```json
-{
-  "type": "register",
-  "label": "backend",
-  "command": "npm run server",
-  "working_dir": "/app",
-  "capabilities": ["process_control", "stdin"]
-}
-```
-
-#### Acknowledgment Message (Server → Runner)
-```json
-{
-  "type": "ack",
-  "label": "backend", 
-  "command_id": "cmd-123",
-  "success": true,
-  "message": "Command executed successfully"
-}
-```
-
-#### Error Message (Bidirectional)
-```json
-{
-  "type": "error",
-  "label": "backend",
-  "error_code": "PROCESS_NOT_FOUND",
-  "message": "Process with PID 1234 not found"
-}
 ```
 
 ### Connection Flow
@@ -369,7 +327,7 @@ The following tools are available to LLMs through the MCP interface:
     "properties": {
       "label": {"type": "string"},
       "action": {"type": "string", "enum": ["restart", "signal"]},
-      "signal": {"type": "string", "enum": ["SIGTERM", "SIGKILL"], "description": "Signal to send (required for signal action)"}
+      "signal": {"type": "string", "enum": ["SIGTERM", "SIGKILL", "SIGINT", "SIGHUP", "SIGUSR1", "SIGUSR2"], "description": "Signal to send (required for signal action)"}
     },
     "required": ["label", "action"]
   }
@@ -472,10 +430,12 @@ type ForwardArgs struct {
 }
 
 type ManagedArgs struct {
-    Command     string            `json:"command"`
-    Label       string            `json:"label"`
-    WorkingDir  string            `json:"working_dir"`
-    Environment map[string]string `json:"environment"`
+    Command       string            `json:"command"`
+    Arguments     []string          `json:"arguments"`
+    Label         string            `json:"label"`
+    WorkingDir    string            `json:"working_dir"`
+    Environment   map[string]string `json:"environment"`
+    RestartPolicy string            `json:"restart_policy,omitempty"`
 }
 ```
 
@@ -566,31 +526,16 @@ const (
 
 ## Configuration
 
-### Server Configuration
-```yaml
-server:
-  host: "localhost"
-  websocket_port: 8765
-  mcp_transport: "stdio"  # stdio | unix:/path/to/socket
+The current implementation uses command-line flags for configuration. Configuration file support is planned as a future enhancement.
 
-buffer:
-  max_age: "5m"
-  max_size: "5MB"
-  max_line_size: "64KB"
-  
-process:
-  timeout: "30s"
-  default_working_dir: "."
-  
-websocket:
-  reconnect_initial_delay: "1s"
-  reconnect_max_delay: "30s" 
-  reconnect_max_attempts: 10
-```
+### Command Line Flags
+- `--websocket-port`: WebSocket server port (default: 8765)
+- `--host`: Server host binding (default: localhost)
+- `--server-url`: Server URL for runners (default: ws://localhost:8765)
+- `--label`: Session label for runners
 
 ### Environment Variables
-- `LOGMCP_SERVER_URL`: Default server URL for runners
-- `LOGMCP_CONFIG`: Path to configuration file
+- `LOGMCP_SERVER_URL`: Default server URL for runners (overrides default ws://localhost:8765)
 
 ## Usage Examples
 
@@ -888,6 +833,7 @@ sequenceDiagram
 
 ## Future Enhancements
 
+- Configuration file support (YAML/JSON)
 - Web UI for log visualization
 - Log parsing and structured data extraction  
 - Alerting based on log patterns
