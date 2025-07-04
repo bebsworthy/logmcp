@@ -471,7 +471,7 @@ func (c *WebSocketClient) SendStatusMessage(status protocol.SessionStatus, pid i
 		return fmt.Errorf("not connected")
 	}
 
-	statusMsg := protocol.NewStatusMessage(c.label, status, &pid)
+	statusMsg := protocol.NewStatusMessage(c.label, status, &pid, exitCode)
 	
 	select {
 	case c.messageChan <- statusMsg:
@@ -709,6 +709,29 @@ func (c *WebSocketClient) IsConnected() bool {
 // GetLabel returns the label for this client
 func (c *WebSocketClient) GetLabel() string {
 	return c.label
+}
+
+// FlushMessages waits for all pending messages to be sent
+func (c *WebSocketClient) FlushMessages() error {
+	// Give messages time to be processed
+	timeout := time.NewTimer(5 * time.Second)
+	defer timeout.Stop()
+
+	for {
+		select {
+		case <-timeout.C:
+			return fmt.Errorf("timeout waiting for messages to flush")
+		default:
+			// Check if message channel is empty
+			if len(c.messageChan) == 0 {
+				// Wait a bit more to ensure the last message is sent
+				time.Sleep(100 * time.Millisecond)
+				return nil
+			}
+			// Small delay to avoid busy waiting
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
 }
 
 // Close closes the WebSocket connection

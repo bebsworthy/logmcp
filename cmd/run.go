@@ -137,7 +137,21 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	// Start stdin forwarding goroutine
 	go forwardStdin(runner)
 	
-	return runner.RunWithSignalHandling()
+	// Run the process
+	err = runner.RunWithSignalHandling()
+	
+	// Ensure all messages are sent before exiting
+	if wsClient := runner.GetWebSocketClient(); wsClient != nil {
+		if flushErr := wsClient.FlushMessages(); flushErr != nil {
+			if verbose {
+				log.Printf("Warning: Failed to flush messages: %v", flushErr)
+			}
+		}
+		// Close the WebSocket connection gracefully
+		wsClient.Close()
+	}
+	
+	return err
 }
 
 // getCurrentWorkingDir returns the current working directory

@@ -371,14 +371,15 @@ func NewErrorMessage(label, errorCode, message string) *ErrorMessage {
 }
 
 // NewStatusMessage creates a new status message
-func NewStatusMessage(label string, status SessionStatus, pid *int) *StatusMessage {
+func NewStatusMessage(label string, status SessionStatus, pid *int, exitCode *int) *StatusMessage {
 	return &StatusMessage{
 		BaseMessage: BaseMessage{
 			Type:  MessageTypeStatus,
 			Label: label,
 		},
-		Status: status,
-		PID:    pid,
+		Status:   status,
+		PID:      pid,
+		ExitCode: exitCode,
 	}
 }
 
