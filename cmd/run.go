@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"os"
@@ -13,7 +14,8 @@ import (
 
 var (
 	// Run command flags
-	runLabel string
+	runLabel      string
+	silenceOutput bool
 )
 
 // runCmd represents the run command
@@ -57,6 +59,7 @@ func init() {
 
 	// Run-specific flags
 	runCmd.Flags().StringVar(&runLabel, "label", "", "label for the session (auto-generated if not provided)")
+	runCmd.Flags().BoolVar(&silenceOutput, "silence-output", false, "suppress local display of process output (logs still sent to server)")
 }
 
 func runCommand(cmd *cobra.Command, args []string) error {
@@ -111,23 +114,28 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	// Set up callbacks
 	setupRunnerCallbacks(runner)
 	
-	// Connect to server with retry logic
-	if verbose {
-		fmt.Printf("Connecting to server...\n")
+	// Debug: Check if WebSocket client exists
+	if runner.GetWebSocketClient() == nil {
+		return fmt.Errorf("WebSocket client not initialized")
 	}
+	
+	// Connect to server with retry logic
+	fmt.Printf("Connecting to server at %s...\n", serverURL)
 	
 	if err := runner.GetWebSocketClient().ConnectWithRetry(); err != nil {
 		return fmt.Errorf("failed to connect to server: %w", err)
 	}
 	
-	if verbose {
-		fmt.Printf("Connected successfully! Label: %s\n", runner.GetWebSocketClient().GetLabel())
-	}
+	// Always show connection confirmation
+	fmt.Printf("✓ Connected to server successfully! Session: %s\n", runner.GetWebSocketClient().GetLabel())
 	
 	// Run the process with signal handling
 	if verbose {
 		fmt.Printf("Starting process...\n")
 	}
+	
+	// Start stdin forwarding goroutine
+	go forwardStdin(runner)
 	
 	return runner.RunWithSignalHandling()
 }
@@ -193,12 +201,35 @@ func setupRunnerCallbacks(processRunner *runner.ProcessRunner) {
 	}
 	
 	processRunner.OnLogLine = func(content, stream string) {
-		if verbose {
+		// Display output by default, unless silenced
+		if !silenceOutput {
 			fmt.Printf("[%s] %s\n", stream, content)
 		}
 	}
 	
 	processRunner.OnError = func(err error) {
 		log.Printf("Process error: %v", err)
+	}
+}
+
+// forwardStdin reads from stdin and forwards input to the process
+func forwardStdin(processRunner *runner.ProcessRunner) {
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		line := scanner.Text()
+		// Add newline since scanner strips it
+		if err := processRunner.SendStdin(line + "\n"); err != nil {
+			if verbose {
+				log.Printf("Failed to send stdin: %v", err)
+			}
+			// Exit goroutine if we can't send stdin (process likely exited)
+			return
+		}
+	}
+	
+	if err := scanner.Err(); err != nil {
+		if verbose {
+			log.Printf("Stdin scanner error: %v", err)
+		}
 	}
 }

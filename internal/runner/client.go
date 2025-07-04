@@ -44,6 +44,13 @@ import (
 	"github.com/logmcp/logmcp/internal/protocol"
 )
 
+// registrationResponse holds the response from session registration
+type registrationResponse struct {
+	success bool
+	message string
+	err     error
+}
+
 // WebSocketClient manages WebSocket connection to LogMCP server
 type WebSocketClient struct {
 	// Connection settings
@@ -57,6 +64,11 @@ type WebSocketClient struct {
 	conn       *websocket.Conn
 	connected  bool
 	connMutex  sync.RWMutex
+
+	// Registration handling
+	registrationChan       chan registrationResponse
+	waitingForRegistration bool
+	registrationMutex      sync.RWMutex
 
 	// Context and lifecycle
 	ctx        context.Context
@@ -135,6 +147,7 @@ func NewWebSocketClientWithConfig(serverURL, label string, config WebSocketClien
 		messageChan:          make(chan interface{}, 100),
 		commandChan:          make(chan *protocol.CommandMessage, 10),
 		stdinChan:            make(chan *protocol.StdinMessage, 10),
+		registrationChan:     make(chan registrationResponse, 1),
 	}
 }
 
@@ -193,7 +206,7 @@ func (c *WebSocketClient) Connect() error {
 	// Establish WebSocket connection
 	dialer := websocket.DefaultDialer
 	dialer.HandshakeTimeout = 10 * time.Second
-
+	
 	conn, _, err := dialer.Dial(u.String(), nil)
 	if err != nil {
 		// Increment reconnection attempts under lock
@@ -204,6 +217,9 @@ func (c *WebSocketClient) Connect() error {
 
 	c.conn = conn
 	c.connected = true
+
+	// Reset registration channel for new connection
+	c.registrationChan = make(chan registrationResponse, 1)
 
 	// Start connection handlers
 	c.wg.Add(3)
@@ -384,6 +400,18 @@ func (c *WebSocketClient) ConnectWithRetryLegacy() error {
 
 // registerSession sends session registration message to server
 func (c *WebSocketClient) registerSession() error {
+	// Set waiting flag
+	c.registrationMutex.Lock()
+	c.waitingForRegistration = true
+	c.registrationMutex.Unlock()
+
+	// Ensure we clear the flag on exit
+	defer func() {
+		c.registrationMutex.Lock()
+		c.waitingForRegistration = false
+		c.registrationMutex.Unlock()
+	}()
+
 	regMsg := protocol.NewSessionRegistrationMessage(
 		c.label,          // Label
 		c.command,        // Command being executed
@@ -401,30 +429,21 @@ func (c *WebSocketClient) registerSession() error {
 		return fmt.Errorf("failed to send registration message: %w", err)
 	}
 
-	// Wait for acknowledgment
-	c.conn.SetReadDeadline(time.Now().Add(c.readTimeout))
-	_, message, err := c.conn.ReadMessage()
-	if err != nil {
-		return fmt.Errorf("failed to read registration response: %w", err)
-	}
-
-	// Parse response
-	msg, err := protocol.ParseMessage(message)
-	if err != nil {
-		return fmt.Errorf("failed to parse registration response: %w", err)
-	}
-
-	switch m := msg.(type) {
-	case *protocol.AckMessage:
-		if !m.Success {
-			return fmt.Errorf("registration failed: %s", m.Message)
+	// Wait for acknowledgment via channel with timeout
+	select {
+	case resp := <-c.registrationChan:
+		if resp.err != nil {
+			return resp.err
 		}
-		// Session registration successful - label is already stored in c.label
+		if !resp.success {
+			return fmt.Errorf("registration failed: %s", resp.message)
+		}
+		// Session registration successful
 		return nil
-	case *protocol.ErrorMessage:
-		return fmt.Errorf("registration error: %s", m.Message)
-	default:
-		return fmt.Errorf("unexpected registration response: %T", msg)
+	case <-time.After(c.readTimeout):
+		return fmt.Errorf("registration timeout after %v", c.readTimeout)
+	case <-c.ctx.Done():
+		return fmt.Errorf("registration cancelled: %w", c.ctx.Err())
 	}
 }
 
@@ -535,6 +554,43 @@ func (c *WebSocketClient) processMessage(message []byte) error {
 		return fmt.Errorf("failed to parse message: %w", err)
 	}
 
+	// Check if we're waiting for registration response
+	c.registrationMutex.RLock()
+	waitingForReg := c.waitingForRegistration
+	c.registrationMutex.RUnlock()
+
+	// Handle registration responses specially
+	if waitingForReg {
+		switch m := msg.(type) {
+		case *protocol.AckMessage:
+			// Update label if server assigned a different one
+			if m.Label != "" && m.Label != c.label {
+				c.label = m.Label
+			}
+			select {
+			case c.registrationChan <- registrationResponse{
+				success: m.Success,
+				message: m.Message,
+			}:
+			default:
+				// Channel full, registration already completed
+			}
+			return nil
+		case *protocol.ErrorMessage:
+			select {
+			case c.registrationChan <- registrationResponse{
+				success: false,
+				message: m.Message,
+				err:     fmt.Errorf("registration error: %s", m.Message),
+			}:
+			default:
+				// Channel full, registration already completed
+			}
+			return nil
+		}
+	}
+
+	// Normal message processing
 	switch m := msg.(type) {
 	case *protocol.CommandMessage:
 		if c.OnCommand != nil {
@@ -559,8 +615,7 @@ func (c *WebSocketClient) processMessage(message []byte) error {
 			c.OnError(fmt.Errorf("server error: %s", m.Message))
 		}
 	case *protocol.AckMessage:
-		// Acknowledgment messages are handled during registration
-		// or as responses to commands we sent - generally nothing to do here
+		// Regular acknowledgment messages - not registration related
 		if !m.Success && c.OnError != nil {
 			c.OnError(fmt.Errorf("server ack error: %s", m.Message))
 		}

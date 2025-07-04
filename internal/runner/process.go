@@ -139,7 +139,7 @@ func NewProcessRunnerWithLogMCPConfig(command, label, serverURL string, cfg *con
 	wsClient := NewWebSocketClientWithConfig(serverURL, label, wsClientConfig)
 	wsClient.SetCommand(command, workingDir, []string{"process"})
 
-	return &ProcessRunner{
+	pr := &ProcessRunner{
 		command:         parts[0],
 		args:            parts[1:],
 		label:           label,
@@ -153,6 +153,14 @@ func NewProcessRunnerWithLogMCPConfig(command, label, serverURL string, cfg *con
 		restartDelay:    cfg.Process.RestartDelay,
 		stdinBuffer:     make(chan string, 100),
 	}
+	
+	// Set up client callbacks
+	if wsClient != nil {
+		wsClient.OnCommand = pr.handleCommand
+		wsClient.OnStdinMessage = pr.handleStdinMessage
+	}
+	
+	return pr
 }
 
 // NewProcessRunnerWithConfig creates a new process runner with custom configuration

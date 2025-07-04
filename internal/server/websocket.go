@@ -46,6 +46,8 @@ type WebSocketServer struct {
 	upgrader       websocket.Upgrader
 	connections    map[*websocket.Conn]*ConnectionInfo
 	connMutex      sync.RWMutex
+	writeMutexes   map[*websocket.Conn]*sync.Mutex
+	writeMutexLock sync.RWMutex
 	ctx            context.Context
 	cancel         context.CancelFunc
 	wg             sync.WaitGroup
@@ -62,6 +64,7 @@ type ConnectionInfo struct {
 	LastPing     time.Time
 	LastActivity time.Time
 	mutex        sync.RWMutex
+	writeMutex   sync.Mutex  // Protects WebSocket writes
 }
 
 // WebSocketServerConfig contains configuration options for the WebSocket server
@@ -105,6 +108,7 @@ func NewWebSocketServerWithConfig(sessionManager *SessionManager, config WebSock
 		sessionManager: sessionManager,
 		upgrader:       upgrader,
 		connections:    make(map[*websocket.Conn]*ConnectionInfo),
+		writeMutexes:   make(map[*websocket.Conn]*sync.Mutex),
 		ctx:            ctx,
 		cancel:         cancel,
 		readTimeout:    config.ReadTimeout,
@@ -115,6 +119,7 @@ func NewWebSocketServerWithConfig(sessionManager *SessionManager, config WebSock
 
 // HandleWebSocket handles HTTP requests and upgrades them to WebSocket connections
 func (ws *WebSocketServer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
+	
 	// Upgrade HTTP connection to WebSocket
 	conn, err := ws.upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -140,6 +145,11 @@ func (ws *WebSocketServer) handleConnection(conn *websocket.Conn) {
 	ws.connMutex.Lock()
 	ws.connections[conn] = connInfo
 	ws.connMutex.Unlock()
+	
+	// Register write mutex
+	ws.writeMutexLock.Lock()
+	ws.writeMutexes[conn] = &sync.Mutex{}
+	ws.writeMutexLock.Unlock()
 
 	// Start connection handlers
 	ctx, cancel := context.WithCancel(ws.ctx)
@@ -224,6 +234,7 @@ func (ws *WebSocketServer) handleMessages(ctx context.Context, conn *websocket.C
 
 // processMessage processes a single incoming message
 func (ws *WebSocketServer) processMessage(conn *websocket.Conn, connInfo *ConnectionInfo, message []byte) error {
+	
 	// Parse message
 	msg, err := protocol.ParseMessage(message)
 	if err != nil {
@@ -293,7 +304,7 @@ func (ws *WebSocketServer) handleRegistration(conn *websocket.Conn, connInfo *Co
 		return ws.sendMessage(conn, errorMsg)
 	}
 
-	// Update connection info
+	// Update connection info with the assigned label (which may be different due to deduplication)
 	connInfo.mutex.Lock()
 	connInfo.Label = session.Label
 	connInfo.mutex.Unlock()
@@ -375,11 +386,26 @@ func (ws *WebSocketServer) handlePing(ctx context.Context, conn *websocket.Conn,
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			// Get write mutex
+			ws.writeMutexLock.RLock()
+			writeMutex, exists := ws.writeMutexes[conn]
+			ws.writeMutexLock.RUnlock()
+			
+			if !exists {
+				return // Connection already closed
+			}
+			
+			// Lock for writing
+			writeMutex.Lock()
+			
 			// Set write deadline
 			conn.SetWriteDeadline(time.Now().Add(ws.writeTimeout))
 			
 			// Send ping
-			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+			err := conn.WriteMessage(websocket.PingMessage, nil)
+			writeMutex.Unlock()
+			
+			if err != nil {
 				log.Printf("Failed to send ping: %v", err)
 				return
 			}
@@ -440,6 +466,19 @@ func (ws *WebSocketServer) SendStdin(label, input string) error {
 
 // sendMessage sends a message over a WebSocket connection
 func (ws *WebSocketServer) sendMessage(conn *websocket.Conn, msg interface{}) error {
+	// Get write mutex for this connection
+	ws.writeMutexLock.RLock()
+	writeMutex, exists := ws.writeMutexes[conn]
+	ws.writeMutexLock.RUnlock()
+	
+	if !exists {
+		return fmt.Errorf("connection not registered")
+	}
+	
+	// Lock for writing
+	writeMutex.Lock()
+	defer writeMutex.Unlock()
+	
 	// Serialize message
 	data, err := protocol.SerializeMessage(msg)
 	if err != nil {
@@ -478,10 +517,15 @@ func (ws *WebSocketServer) BroadcastMessage(msg interface{}) error {
 
 // cleanup removes a connection and updates associated session
 func (ws *WebSocketServer) cleanup(conn *websocket.Conn, connInfo *ConnectionInfo) {
+	// Get label from connection info
+	connInfo.mutex.RLock()
+	label := connInfo.Label
+	connInfo.mutex.RUnlock()
+
 	// Update session first before removing connection
-	if connInfo.Label != "" {
-		if err := ws.sessionManager.DisconnectSession(connInfo.Label); err != nil {
-			log.Printf("Warning: Failed to disconnect session %s: %v", connInfo.Label, err)
+	if label != "" {
+		if err := ws.sessionManager.DisconnectSession(label); err != nil {
+			log.Printf("Warning: Failed to disconnect session %s: %v", label, err)
 		}
 	}
 
@@ -489,8 +533,13 @@ func (ws *WebSocketServer) cleanup(conn *websocket.Conn, connInfo *ConnectionInf
 	ws.connMutex.Lock()
 	delete(ws.connections, conn)
 	ws.connMutex.Unlock()
+	
+	// Remove write mutex
+	ws.writeMutexLock.Lock()
+	delete(ws.writeMutexes, conn)
+	ws.writeMutexLock.Unlock()
 
-	log.Printf("WebSocket connection closed for session: %s", connInfo.Label)
+	log.Printf("WebSocket connection closed for session: %s", label)
 }
 
 // GetConnectionStats returns statistics about active connections
