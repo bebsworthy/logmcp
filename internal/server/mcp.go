@@ -34,6 +34,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -60,7 +61,7 @@ type MCPServer struct {
 func NewMCPServer(sessionManager *SessionManager, wsServer *WebSocketServer) *MCPServer {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// Create mcp-go server instance
+	// Create mcp-go server instance with descriptive information
 	mcpServer := server.NewMCPServer(
 		"logmcp",
 		"1.0.0",
@@ -86,7 +87,7 @@ func (mcpSrv *MCPServer) registerTools() {
 	// Register list_sessions tool
 	mcpSrv.mcpServer.AddTool(
 		mcp.NewTool("list_sessions",
-			mcp.WithDescription("List all active log sessions"),
+			mcp.WithDescription("List all active log sessions to see what processes are being monitored. Returns session labels, status (running/stopped/crashed), process information, and buffer statistics. Always use this first to discover available sessions before retrieving logs."),
 		),
 		mcpSrv.handleListSessions,
 	)
@@ -94,30 +95,30 @@ func (mcpSrv *MCPServer) registerTools() {
 	// Register get_logs tool
 	mcpSrv.mcpServer.AddTool(
 		mcp.NewTool("get_logs",
-			mcp.WithDescription("Get and search logs from one or more sessions"),
+			mcp.WithDescription("Retrieve and search log entries from one or more sessions. Use this to debug issues, monitor output, or search for specific patterns. Returns log entries with timestamps, content, and stream type (stdout/stderr). Always call list_sessions first to get valid session labels."),
 			mcp.WithArray("labels",
 				mcp.Required(),
-				mcp.Description("Session labels to query (single or multiple)"),
+				mcp.Description("Session labels to query. Get these from list_sessions. Can query multiple sessions at once."),
 				mcp.Items(map[string]interface{}{
 					"type":        "string",
 					"description": "Session label",
 				}),
 			),
 			mcp.WithNumber("lines",
-				mcp.Description("Number of lines to return"),
+				mcp.Description("Number of log lines to return per session. Use larger values to see more history."),
 			),
 			mcp.WithString("since",
-				mcp.Description("ISO timestamp"),
+				mcp.Description("ISO timestamp to get logs after this time. Example: '2024-01-15T10:30:00Z'"),
 			),
 			mcp.WithString("stream",
-				mcp.Description("Stream type filter"),
+				mcp.Description("Filter by stream type. Use 'stderr' to see only errors, 'stdout' for regular output, or 'both' for everything."),
 				mcp.Enum("stdout", "stderr", "both"),
 			),
 			mcp.WithString("pattern",
-				mcp.Description("Regex pattern to filter log entries"),
+				mcp.Description("Regex pattern to search for in log content. Example: 'error|fail|exception' to find errors."),
 			),
 			mcp.WithNumber("max_results",
-				mcp.Description("Maximum results across all sessions"),
+				mcp.Description("Maximum total results across all queried sessions. Prevents overwhelming responses."),
 			),
 		),
 		mcpSrv.handleGetLogs,
@@ -126,33 +127,33 @@ func (mcpSrv *MCPServer) registerTools() {
 	// Register start_process tool
 	mcpSrv.mcpServer.AddTool(
 		mcp.NewTool("start_process",
-			mcp.WithDescription("Launch a new managed process"),
+			mcp.WithDescription("Launch a new managed process that LogMCP will monitor and control. The process output is automatically captured and available via get_logs. Use this to start services, run scripts, or execute any command that you need to monitor. The process can be controlled later with control_process."),
 			mcp.WithString("command",
 				mcp.Required(),
-				mcp.Description("Command to execute"),
+				mcp.Description("The executable command to run. Examples: 'python', 'node', 'npm', './script.sh'"),
 			),
 			mcp.WithArray("arguments",
-				mcp.Description("Command arguments"),
+				mcp.Description("Array of command arguments. Example: ['server.py', '--port', '8080'] for 'python server.py --port 8080'"),
 				mcp.Items(map[string]interface{}{
 					"type": "string",
 				}),
 			),
 			mcp.WithString("label",
 				mcp.Required(),
-				mcp.Description("Label for the process session"),
+				mcp.Description("Unique identifier for this process session. Use descriptive names like 'backend-api' or 'test-runner'. This label is used in other commands."),
 			),
 			mcp.WithString("working_dir",
-				mcp.Description("Working directory"),
+				mcp.Description("Directory to run the process in. Defaults to current directory. Use absolute paths like '/home/user/project'"),
 			),
 			mcp.WithObject("environment",
-				mcp.Description("Environment variables"),
+				mcp.Description("Additional environment variables for the process. Example: {'NODE_ENV': 'production', 'PORT': '3000'}"),
 			),
 			mcp.WithString("restart_policy",
-				mcp.Description("Restart policy"),
+				mcp.Description("Automatic restart behavior. 'never': don't restart, 'on-failure': restart if process crashes, 'always': restart whenever it stops"),
 				mcp.Enum("never", "always", "on-failure"),
 			),
 			mcp.WithBoolean("collect_startup_logs",
-				mcp.Description("Collect startup logs"),
+				mcp.Description("Whether to capture and store logs from process startup. Set to false for very noisy processes."),
 			),
 		),
 		mcpSrv.handleStartProcess,
@@ -161,18 +162,18 @@ func (mcpSrv *MCPServer) registerTools() {
 	// Register control_process tool
 	mcpSrv.mcpServer.AddTool(
 		mcp.NewTool("control_process",
-			mcp.WithDescription("Control a managed process"),
+			mcp.WithDescription("Send control commands to a managed process. Use this to restart services, send signals for graceful shutdown, or force-kill unresponsive processes. Only works with processes started via start_process or 'logmcp run' command."),
 			mcp.WithString("label",
 				mcp.Required(),
-				mcp.Description("Session label"),
+				mcp.Description("The session label of the process to control. Get this from list_sessions."),
 			),
 			mcp.WithString("action",
 				mcp.Required(),
-				mcp.Description("Action to perform"),
+				mcp.Description("Action to perform. 'restart': stop and start the process, 'signal': send a specific Unix signal"),
 				mcp.Enum("restart", "signal"),
 			),
 			mcp.WithString("signal",
-				mcp.Description("Signal to send (required for signal action)"),
+				mcp.Description("Unix signal to send (only for 'signal' action). SIGTERM: graceful shutdown, SIGKILL: force kill, SIGINT: interrupt (Ctrl+C), SIGHUP: reload config"),
 				mcp.Enum("SIGTERM", "SIGKILL", "SIGINT", "SIGHUP", "SIGUSR1", "SIGUSR2"),
 			),
 		),
@@ -182,17 +183,25 @@ func (mcpSrv *MCPServer) registerTools() {
 	// Register send_stdin tool
 	mcpSrv.mcpServer.AddTool(
 		mcp.NewTool("send_stdin",
-			mcp.WithDescription("Send input to a process stdin"),
+			mcp.WithDescription("Send input to a process's stdin stream for interactive commands. Use this to provide input to running processes that are waiting for user input, send commands to REPLs, or interact with command-line applications. The input is sent exactly as provided."),
 			mcp.WithString("label",
 				mcp.Required(),
-				mcp.Description("Session label"),
+				mcp.Description("The session label of the process to send input to. Process must be running and support stdin."),
 			),
 			mcp.WithString("input",
 				mcp.Required(),
-				mcp.Description("Input to send"),
+				mcp.Description("Text to send to the process stdin. Include newlines (\\n) if the process expects them. Example: 'yes\\n' to confirm a prompt."),
 			),
 		),
 		mcpSrv.handleSendStdin,
+	)
+
+	// Register get_help tool
+	mcpSrv.mcpServer.AddTool(
+		mcp.NewTool("get_help",
+			mcp.WithDescription("Get help and context information about using LogMCP. Returns quick start guide, key concepts, common patterns, and tips for effective log monitoring and process control."),
+		),
+		mcpSrv.handleGetHelp,
 	)
 }
 
@@ -281,6 +290,46 @@ func (mcpSrv *MCPServer) handleListSessions(ctx context.Context, request mcp.Cal
 	}
 
 	response := protocol.NewListSessionsResponse(sessionInfos)
+	
+	// If no sessions, add helpful context
+	if len(sessionInfos) == 0 {
+		// Create a response with context hint
+		type ListSessionsWithContext struct {
+			Success bool `json:"success"`
+			Data    struct {
+				Sessions []protocol.SessionInfo `json:"sessions"`
+				Help     string                 `json:"help,omitempty"`
+			} `json:"data"`
+			Meta struct {
+				TotalCount  int `json:"total_count"`
+				ActiveCount int `json:"active_count"`
+			} `json:"meta"`
+		}
+		
+		contextResponse := ListSessionsWithContext{
+			Success: true,
+		}
+		contextResponse.Data.Sessions = sessionInfos
+		contextResponse.Data.Help = "No sessions found. Use 'start_process' to launch a new monitored process, or start a process with 'logmcp run <command>' from the command line."
+		contextResponse.Meta.TotalCount = 0
+		contextResponse.Meta.ActiveCount = 0
+		
+		resultJSON, err := json.MarshalIndent(contextResponse, "", "  ")
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal response: %w", err)
+		}
+		
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: string(resultJSON),
+				},
+			},
+		}, nil
+	}
+	
+	// Normal response with sessions
 	resultJSON, err := json.MarshalIndent(response, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal response: %w", err)
@@ -438,6 +487,14 @@ func (mcpSrv *MCPServer) handleGetLogs(ctx context.Context, request mcp.CallTool
 		if totalResults >= *req.MaxResults {
 			break
 		}
+	}
+
+	// Check if all requested sessions were not found
+	if len(notFoundSessions) > 0 && len(queriedSessions) == 0 {
+		if len(notFoundSessions) == 1 {
+			return nil, addContextToError(fmt.Errorf("session '%s' not found", notFoundSessions[0]), "get_logs")
+		}
+		return nil, addContextToError(fmt.Errorf("none of the requested sessions were found: %v", notFoundSessions), "get_logs")
 	}
 
 	// Sort logs by timestamp
@@ -853,7 +910,7 @@ func (mcpSrv *MCPServer) handleControlProcess(ctx context.Context, request mcp.C
 	// Get session
 	session, err := mcpSrv.sessionManager.GetSession(req.Label)
 	if err != nil {
-		return nil, fmt.Errorf("session not found: %w", err)
+		return nil, addContextToError(fmt.Errorf("session not found: %w", err), "control_process")
 	}
 
 	var message string
@@ -952,7 +1009,7 @@ func (mcp *MCPServer) restartProcess(session *Session) (string, error) {
 	managedArgs, ok := session.RunnerArgs.(protocol.ManagedArgs)
 	if !ok {
 		session.mutex.Unlock()
-		return "", fmt.Errorf("session is not a managed process")
+		return "", addContextToError(fmt.Errorf("session is not a managed process"), "control_process")
 	}
 
 	// Make a copy of args to use after unlocking
@@ -1001,7 +1058,7 @@ func (mcp *MCPServer) signalProcess(session *Session, signalName string) (string
 	session.mutex.RUnlock()
 
 	if process == nil {
-		return "", fmt.Errorf("no process associated with session")
+		return "", addContextToError(fmt.Errorf("no process associated with session"), "control_process")
 	}
 
 	// Map signal name to syscall.Signal
@@ -1058,7 +1115,7 @@ func (mcpSrv *MCPServer) handleSendStdin(ctx context.Context, request mcp.CallTo
 	// For remote processes, we use the WebSocket server
 	session, err := mcpSrv.sessionManager.GetSession(req.Label)
 	if err != nil {
-		return nil, fmt.Errorf("session not found: %w", err)
+		return nil, addContextToError(fmt.Errorf("session not found: %w", err), "send_stdin")
 	}
 
 	var bytesSent int
@@ -1073,7 +1130,7 @@ func (mcpSrv *MCPServer) handleSendStdin(ctx context.Context, request mcp.CallTo
 	} else {
 		// Send via WebSocket for remote processes
 		if err := mcpSrv.wsServer.SendStdin(session.Label, req.Input); err != nil {
-			return nil, fmt.Errorf("failed to send stdin: %w", err)
+			return nil, addContextToError(fmt.Errorf("failed to send stdin: %w", err), "send_stdin")
 		}
 		bytesSent = len(req.Input)
 		message = "Input sent to process stdin"
@@ -1098,7 +1155,69 @@ func (mcpSrv *MCPServer) handleSendStdin(ctx context.Context, request mcp.CallTo
 // Note: The mcp-go library handles response serialization and communication automatically.
 // Public tool methods removed as they are handled by the mcp-go library internally.
 
+// handleGetHelp handles the get_help tool
+func (mcpSrv *MCPServer) handleGetHelp(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// Get the system context from the GetMCPContext function
+	helpContent := GetMCPContext()
+	
+	// Prepare response
+	response := protocol.GetHelpResponse{
+		Success: true,
+		Data: struct {
+			Content string `json:"content"`
+		}{
+			Content: helpContent,
+		},
+	}
+	
+	// Serialize response
+	resultJSON, err := json.Marshal(response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to serialize response: %w", err)
+	}
+	
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
+				Type: "text",
+				Text: string(resultJSON),
+			},
+		},
+	}, nil
+}
+
 // Helper functions
+
+// addContextToError adds helpful context hints to error messages
+func addContextToError(err error, toolName string) error {
+	if err == nil {
+		return nil
+	}
+	
+	errMsg := err.Error()
+	var hint string
+	
+	// Add context based on the error and tool
+	switch {
+	case strings.Contains(errMsg, "session not found"):
+		hint = " Use 'list_sessions' to see available sessions."
+	case strings.Contains(errMsg, "label"):
+		hint = " Session labels must be unique identifiers like 'backend-api' or 'test-runner'."
+	case strings.Contains(errMsg, "not running"):
+		hint = " Process must be in 'running' state. Check session status with 'list_sessions'."
+	case strings.Contains(errMsg, "signal"):
+		hint = " Valid signals: SIGTERM (graceful), SIGKILL (force), SIGINT (interrupt), SIGHUP (reload)."
+	case strings.Contains(errMsg, "stdin"):
+		hint = " Use 'send_stdin' only with running processes that support input."
+	case toolName == "get_logs" && strings.Contains(errMsg, "labels"):
+		hint = " Call 'list_sessions' first to get valid session labels."
+	}
+	
+	if hint != "" {
+		return fmt.Errorf("%s%s", errMsg, hint)
+	}
+	return err
+}
 
 // formatBytes formats bytes as human-readable string
 func formatBytes(bytes int) string {
@@ -1130,7 +1249,7 @@ func (mcp *MCPServer) GetHealth() MCPServerHealth {
 	return MCPServerHealth{
 		IsHealthy:           mcp.IsHealthy(),
 		SessionManagerStats: sessionStats,
-		RegisteredTools:     5, // Fixed count of registered tools: list_sessions, get_logs, start_process, control_process, send_stdin
+		RegisteredTools:     6, // Fixed count of registered tools: list_sessions, get_logs, start_process, control_process, send_stdin, get_help
 	}
 }
 

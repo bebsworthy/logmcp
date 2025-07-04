@@ -29,7 +29,7 @@ func GetMCPTools() []MCPTool {
 	return []MCPTool{
 		{
 			Name:        "list_sessions",
-			Description: "List all active log sessions",
+			Description: "List all active log sessions to see what processes are being monitored. Returns session labels, status (running/stopped/crashed), process information, and buffer statistics. Always use this first to discover available sessions before retrieving logs.",
 			InputSchema: map[string]interface{}{
 				"type":       "object",
 				"properties": map[string]interface{}{},
@@ -37,36 +37,38 @@ func GetMCPTools() []MCPTool {
 		},
 		{
 			Name:        "get_logs",
-			Description: "Get and search logs from one or more sessions",
+			Description: "Retrieve and search log entries from one or more sessions. Use this to debug issues, monitor output, or search for specific patterns. Returns log entries with timestamps, content, and stream type (stdout/stderr). Always call list_sessions first to get valid session labels.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"labels": map[string]interface{}{
 						"type":        "array",
 						"items":       map[string]interface{}{"type": "string"},
-						"description": "Session labels to query (single or multiple)",
+						"description": "Session labels to query. Get these from list_sessions. Can query multiple sessions at once.",
 					},
 					"lines": map[string]interface{}{
-						"type":    "number",
-						"default": 100,
+						"type":        "number",
+						"default":     100,
+						"description": "Number of log lines to return per session. Use larger values to see more history.",
 					},
 					"since": map[string]interface{}{
 						"type":        "string",
-						"description": "ISO timestamp",
+						"description": "ISO timestamp to get logs after this time. Example: '2024-01-15T10:30:00Z'",
 					},
 					"stream": map[string]interface{}{
 						"type":        "string",
+						"enum":        []string{"stdout", "stderr", "both"},
 						"default":     "both",
-						"description": "Filter by stream type: stdout, stderr, or both",
+						"description": "Filter by stream type. Use 'stderr' to see only errors, 'stdout' for regular output, or 'both' for everything.",
 					},
 					"pattern": map[string]interface{}{
 						"type":        "string",
-						"description": "Regex pattern to filter log entries",
+						"description": "Regex pattern to search for in log content. Example: 'error|fail|exception' to find errors.",
 					},
 					"max_results": map[string]interface{}{
 						"type":        "number",
 						"default":     1000,
-						"description": "Maximum results across all sessions",
+						"description": "Maximum total results across all queried sessions. Prevents overwhelming responses.",
 					},
 				},
 				"required": []string{"labels"},
@@ -74,45 +76,46 @@ func GetMCPTools() []MCPTool {
 		},
 		{
 			Name:        "start_process",
-			Description: "Launch a new managed process",
+			Description: "Launch a new managed process that LogMCP will monitor and control. The process output is automatically captured and available via get_logs. Use this to start services, run scripts, or execute any command that you need to monitor. The process can be controlled later with control_process.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"command": map[string]interface{}{
 						"type":        "string",
-						"description": "Command to execute",
+						"description": "The executable command to run. Examples: 'python', 'node', 'npm', './script.sh'",
 					},
 					"arguments": map[string]interface{}{
 						"type":        "array",
-						"description": "Command arguments",
+						"description": "Array of command arguments. Example: ['server.py', '--port', '8080'] for 'python server.py --port 8080'",
 						"items": map[string]interface{}{
 							"type": "string",
 						},
 					},
 					"label": map[string]interface{}{
 						"type":        "string",
-						"description": "Label for the process session",
+						"description": "Unique identifier for this process session. Use descriptive names like 'backend-api' or 'test-runner'. This label is used in other commands.",
 					},
 					"working_dir": map[string]interface{}{
 						"type":        "string",
-						"description": "Working directory for the process",
+						"description": "Directory to run the process in. Defaults to current directory. Use absolute paths like '/home/user/project'",
 					},
 					"environment": map[string]interface{}{
 						"type":        "object",
-						"description": "Environment variables",
+						"description": "Additional environment variables for the process. Example: {'NODE_ENV': 'production', 'PORT': '3000'}",
 						"additionalProperties": map[string]interface{}{
 							"type": "string",
 						},
 					},
 					"restart_policy": map[string]interface{}{
 						"type":        "string",
+						"enum":        []string{"never", "on-failure", "always"},
 						"default":     "never",
-						"description": "Process restart policy: never, on-failure, or always",
+						"description": "Automatic restart behavior. 'never': don't restart, 'on-failure': restart if process crashes, 'always': restart whenever it stops",
 					},
 					"collect_startup_logs": map[string]interface{}{
 						"type":        "boolean",
 						"default":     true,
-						"description": "Whether to collect logs during startup",
+						"description": "Whether to capture and store logs from process startup. Set to false for very noisy processes.",
 					},
 				},
 				"required": []string{"command", "label"},
@@ -120,21 +123,23 @@ func GetMCPTools() []MCPTool {
 		},
 		{
 			Name:        "control_process",
-			Description: "Control a managed process",
+			Description: "Send control commands to a managed process. Use this to restart services, send signals for graceful shutdown, or force-kill unresponsive processes. Only works with processes started via start_process or 'logmcp run' command.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"label": map[string]interface{}{
 						"type":        "string",
-						"description": "Label of the process session",
+						"description": "The session label of the process to control. Get this from list_sessions.",
 					},
 					"action": map[string]interface{}{
 						"type":        "string",
-						"description": "Action to perform: restart or signal",
+						"enum":        []string{"restart", "signal"},
+						"description": "Action to perform. 'restart': stop and start the process, 'signal': send a specific Unix signal",
 					},
 					"signal": map[string]interface{}{
 						"type":        "string",
-						"description": "Signal to send (required for signal action): SIGTERM, SIGKILL, SIGINT, SIGHUP, SIGUSR1, or SIGUSR2",
+						"enum":        []string{"SIGTERM", "SIGKILL", "SIGINT", "SIGHUP", "SIGUSR1", "SIGUSR2"},
+						"description": "Unix signal to send (only for 'signal' action). SIGTERM: graceful shutdown, SIGKILL: force kill, SIGINT: interrupt (Ctrl+C), SIGHUP: reload config",
 					},
 				},
 				"required": []string{"label", "action"},
@@ -142,17 +147,17 @@ func GetMCPTools() []MCPTool {
 		},
 		{
 			Name:        "send_stdin",
-			Description: "Send input to a process stdin",
+			Description: "Send input to a process's stdin stream for interactive commands. Use this to provide input to running processes that are waiting for user input, send commands to REPLs, or interact with command-line applications. The input is sent exactly as provided.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"label": map[string]interface{}{
 						"type":        "string",
-						"description": "Label of the process session",
+						"description": "The session label of the process to send input to. Process must be running and support stdin.",
 					},
 					"input": map[string]interface{}{
 						"type":        "string",
-						"description": "Input to send to process stdin",
+						"description": "Text to send to the process stdin. Include newlines (\\n) if the process expects them. Example: 'yes\\n' to confirm a prompt.",
 					},
 				},
 				"required": []string{"label", "input"},
@@ -283,6 +288,14 @@ type SendStdinResponse struct {
 	Data    struct {
 		Message   string `json:"message"`
 		BytesSent int    `json:"bytes_sent"`
+	} `json:"data"`
+}
+
+// GetHelpResponse represents the response from get_help
+type GetHelpResponse struct {
+	Success bool `json:"success"`
+	Data    struct {
+		Content string `json:"content"`
 	} `json:"data"`
 }
 

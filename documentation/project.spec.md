@@ -49,6 +49,8 @@ The following commands are available to LLMs through the MCP interface:
 - **control_process** - Send control commands to managed processes (restart, signal) with specific signal names (SIGTERM, SIGKILL)
 - **send_stdin** - Send input directly to a process's stdin for interactive commands or configuration
 
+For detailed usage information, examples, and best practices, see [MCP LLM Usage Guide](./mcp-llm-guide.md).
+
 ## Server-Runner Communication
 
 The WebSocket protocol between the server and runners supports bidirectional communication with the following message types:
