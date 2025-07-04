@@ -392,6 +392,7 @@ func (mcpSrv *MCPServer) handleGetLogs(ctx context.Context, request mcp.CallTool
 		session.mutex.RLock()
 		if session.LogBuffer == nil {
 			session.mutex.RUnlock()
+			// Return empty logs for this session - it has no buffer
 			continue
 		}
 
@@ -542,6 +543,7 @@ func (mcpSrv *MCPServer) handleStartProcess(ctx context.Context, request mcp.Cal
 		defaultCollect := true
 		req.CollectStartupLogs = &defaultCollect
 	}
+	
 
 	// Create managed args
 	managedArgs := protocol.ManagedArgs{
@@ -630,6 +632,9 @@ func (mcpSrv *MCPServer) handleStartProcess(ctx context.Context, request mcp.Cal
 
 // startManagedProcess starts a managed process for a session
 func (mcpSrv *MCPServer) startManagedProcess(session *Session, req protocol.StartProcessRequest) error {
+	// Determine if we should collect logs
+	collectLogs := req.CollectStartupLogs == nil || *req.CollectStartupLogs
+
 	// Create command with arguments
 	cmd := exec.Command(req.Command, req.Arguments...)
 	cmd.Dir = *req.WorkingDir
@@ -684,8 +689,12 @@ func (mcpSrv *MCPServer) startManagedProcess(session *Session, req protocol.Star
 		for scanner.Scan() {
 			line := scanner.Text()
 			logMsg := protocol.NewLogMessage(session.Label, line, protocol.StreamStdout, session.PID)
-			if session.LogBuffer != nil {
-				session.LogBuffer.AddFromMessage(logMsg)
+			if collectLogs {
+				session.mutex.RLock()
+				if session.LogBuffer != nil {
+					session.LogBuffer.AddFromMessage(logMsg)
+				}
+				session.mutex.RUnlock()
 			}
 		}
 	}()
@@ -699,8 +708,12 @@ func (mcpSrv *MCPServer) startManagedProcess(session *Session, req protocol.Star
 		for scanner.Scan() {
 			line := scanner.Text()
 			logMsg := protocol.NewLogMessage(session.Label, line, protocol.StreamStderr, session.PID)
-			if session.LogBuffer != nil {
-				session.LogBuffer.AddFromMessage(logMsg)
+			if collectLogs {
+				session.mutex.RLock()
+				if session.LogBuffer != nil {
+					session.LogBuffer.AddFromMessage(logMsg)
+				}
+				session.mutex.RUnlock()
 			}
 		}
 	}()
