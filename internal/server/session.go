@@ -173,9 +173,15 @@ func (sm *SessionManager) CreateSession(label, command, workingDir string, capab
 	if existingSession, exists := sm.sessions[label]; exists {
 		existingSession.mutex.RLock()
 		connStatus := existingSession.ConnectionStatus
+		runnerMode := existingSession.RunnerMode
+		status := existingSession.Status
 		existingSession.mutex.RUnlock()
 		
-		if connStatus == ConnectionDisconnected {
+		// Only reuse label if session is disconnected AND not running
+		// Managed processes may be disconnected but still running
+		if connStatus == ConnectionDisconnected && 
+		   status != protocol.StatusRunning && 
+		   runnerMode != ModeManaged {
 			// Remove the old disconnected session to reuse the label
 			sm.removeSessionUnsafe(label)
 		}

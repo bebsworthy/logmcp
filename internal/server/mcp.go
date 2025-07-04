@@ -489,14 +489,6 @@ func (mcpSrv *MCPServer) handleGetLogs(ctx context.Context, request mcp.CallTool
 		}
 	}
 
-	// Check if all requested sessions were not found
-	if len(notFoundSessions) > 0 && len(queriedSessions) == 0 {
-		if len(notFoundSessions) == 1 {
-			return nil, addContextToError(fmt.Errorf("session '%s' not found", notFoundSessions[0]), "get_logs")
-		}
-		return nil, addContextToError(fmt.Errorf("none of the requested sessions were found: %v", notFoundSessions), "get_logs")
-	}
-
 	// Sort logs by timestamp
 	if len(allLogs) > 1 {
 		for i := 0; i < len(allLogs)-1; i++ {
@@ -514,6 +506,14 @@ func (mcpSrv *MCPServer) handleGetLogs(ctx context.Context, request mcp.CallTool
 	}
 
 	truncated := totalResults >= *req.MaxResults
+
+	// Check if all requested sessions were not found
+	if len(notFoundSessions) > 0 && len(queriedSessions) == 0 {
+		return nil, addContextToError(
+			fmt.Errorf("session not found: %v", notFoundSessions),
+			"get_logs",
+		)
+	}
 
 	response := protocol.NewGetLogsResponse(allLogs, queriedSessions, notFoundSessions, truncated)
 	resultJSON, err := json.MarshalIndent(response, "", "  ")

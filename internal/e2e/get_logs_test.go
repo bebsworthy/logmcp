@@ -533,13 +533,20 @@ func TestGetLogs_NonExistentSession(t *testing.T) {
 
 	// Try to get logs from non-existent session
 	logs, err := ts.GetLogs([]string{"non-existent"})
-	if err != nil {
-		t.Fatalf("Failed to get logs: %v", err)
+	
+	// Should return an error for non-existent session
+	if err == nil {
+		t.Fatal("Expected error for non-existent session, got nil")
 	}
-
-	// Should return empty logs, not error
+	
+	// Error should mention the session not found
+	if !strings.Contains(err.Error(), "non-existent") || !strings.Contains(err.Error(), "not found") {
+		t.Errorf("Expected error mentioning 'non-existent' and 'not found', got: %v", err)
+	}
+	
+	// Logs should be empty when error occurs
 	if len(logs) != 0 {
-		t.Errorf("Expected no logs for non-existent session, got %d", len(logs))
+		t.Errorf("Expected no logs when error occurs, got %d", len(logs))
 	}
 
 	// Test mixed existent and non-existent sessions

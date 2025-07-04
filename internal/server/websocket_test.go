@@ -288,7 +288,7 @@ func TestWebSocketServer_StatusMessage(t *testing.T) {
 
 	// Send status message
 	pid := 1234
-	statusMsg := protocol.NewStatusMessage("backend", protocol.StatusRunning, &pid)
+	statusMsg := protocol.NewStatusMessage("backend", protocol.StatusRunning, &pid, nil)
 	statusMsg.Message = "Process started successfully"
 
 	msgData, err = protocol.SerializeMessage(statusMsg)

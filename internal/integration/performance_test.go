@@ -430,7 +430,7 @@ func TestStressMemoryUsage(t *testing.T) {
 func BenchmarkMessageSerialization(b *testing.B) {
 	messages := []interface{}{
 		protocol.NewLogMessage("test-label", "Benchmark log message content", "stdout", 1234),
-		protocol.NewStatusMessage("test-label", protocol.StatusRunning, &[]int{1234}[0]),
+		protocol.NewStatusMessage("test-label", protocol.StatusRunning, &[]int{1234}[0], nil),
 		protocol.NewCommandMessage("test-label", "restart", nil),
 		protocol.NewAckMessage("test-label", true, "Success"),
 		protocol.NewErrorMessage("test-label", "TEST_ERROR", "Test error message"),
@@ -452,7 +452,7 @@ func BenchmarkMessageDeserialization(b *testing.B) {
 	// Pre-serialize messages
 	messages := []interface{}{
 		protocol.NewLogMessage("test-label", "Benchmark log message content", "stdout", 1234),
-		protocol.NewStatusMessage("test-label", protocol.StatusRunning, &[]int{1234}[0]),
+		protocol.NewStatusMessage("test-label", protocol.StatusRunning, &[]int{1234}[0], nil),
 		protocol.NewCommandMessage("test-label", "restart", nil),
 		protocol.NewAckMessage("test-label", true, "Success"),
 		protocol.NewErrorMessage("test-label", "TEST_ERROR", "Test error message"),
