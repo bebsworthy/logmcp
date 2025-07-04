@@ -201,13 +201,13 @@ func TestComponentSpecificLoggers(t *testing.T) {
 		{
 			name: "runner_logger",
 			createFn: func() (*Logger, error) {
-				return NewRunnerLogger(cfg, "session-123", "test-runner")
+				return NewRunnerLogger(cfg, "session-123")
 			},
 		},
 		{
 			name: "forwarder_logger",
 			createFn: func() (*Logger, error) {
-				return NewForwarderLogger(cfg, "session-456", "test-forwarder", "/var/log/test.log")
+				return NewForwarderLogger(cfg, "session-456", "/var/log/test.log")
 			},
 		},
 	}

@@ -20,6 +20,9 @@ type ReceivedMessage struct {
 	Timestamp    time.Time
 }
 
+// CleanupCheckIntervalForTesting is a shorter interval for tests
+const CleanupCheckIntervalForTesting = 50 * time.Millisecond
+
 // TestWebSocketServer wraps a test server with message tracking
 type TestWebSocketServer struct {
 	*httptest.Server
@@ -40,6 +43,37 @@ func NewTestWebSocketServer(t *testing.T) *TestWebSocketServer {
 		100*time.Millisecond, // cleanup delay
 		50*time.Millisecond,  // cleanup interval
 	)
+	
+	// Create WebSocket server with short timeouts for testing
+	config := server.WebSocketServerConfig{
+		ReadTimeout:  5 * time.Second,  // Shorter timeout for tests
+		WriteTimeout: 5 * time.Second,
+		PingInterval: 10 * time.Second,
+		CheckOrigin:  nil,
+	}
+	wsServer := server.NewWebSocketServerWithConfig(sessionMgr, config)
+	
+	ts := &TestWebSocketServer{
+		wsServer:    wsServer,
+		sessionMgr:  sessionMgr,
+		messageChan: make(chan ReceivedMessage, 100),
+	}
+	
+	// Create HTTP test server
+	ts.Server = httptest.NewServer(http.HandlerFunc(wsServer.HandleWebSocket))
+	
+	// Start message collector
+	go ts.collectMessages()
+	
+	return ts
+}
+
+// NewTestWebSocketServerWithConfig creates a test server with custom cleanup configuration
+func NewTestWebSocketServerWithConfig(t *testing.T, cleanupDelay, cleanupInterval time.Duration) *TestWebSocketServer {
+	t.Helper()
+	
+	// Create session manager with custom cleanup intervals
+	sessionMgr := server.NewSessionManagerWithConfig(cleanupDelay, cleanupInterval)
 	
 	// Create WebSocket server with short timeouts for testing
 	config := server.WebSocketServerConfig{
