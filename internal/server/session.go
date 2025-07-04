@@ -169,6 +169,18 @@ func (sm *SessionManager) CreateSession(label, command, workingDir string, capab
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
 
+	// Check if we can reuse the label by removing a disconnected session
+	if existingSession, exists := sm.sessions[label]; exists {
+		existingSession.mutex.RLock()
+		connStatus := existingSession.ConnectionStatus
+		existingSession.mutex.RUnlock()
+		
+		if connStatus == ConnectionDisconnected {
+			// Remove the old disconnected session to reuse the label
+			sm.removeSessionUnsafe(label)
+		}
+	}
+
 	// Resolve label conflicts
 	resolvedLabel := sm.resolveLabelConflictUnsafe(label)
 

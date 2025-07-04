@@ -161,12 +161,14 @@ func (ws *WebSocketServer) handleConnection(conn *websocket.Conn) {
 	// Start ping handler
 	go func() {
 		defer wg.Done()
+		defer cancel() // Cancel context when ping handler exits
 		ws.handlePing(ctx, conn, connInfo)
 	}()
 	
 	// Start message reader
 	go func() {
 		defer wg.Done()
+		defer cancel() // Cancel context when message handler exits
 		ws.handleMessages(ctx, conn, connInfo)
 	}()
 

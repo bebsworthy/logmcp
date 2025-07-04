@@ -736,17 +736,20 @@ func (c *WebSocketClient) FlushMessages() error {
 
 // Close closes the WebSocket connection
 func (c *WebSocketClient) Close() error {
-	// Cancel context to signal shutdown
-	c.cancel()
-
-	// Close connection
+	// Close connection with proper close message
 	c.connMutex.Lock()
 	wasConnected := c.connected
 	if c.conn != nil {
+		// Send close message to server
+		closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "Client closing")
+		c.conn.WriteControl(websocket.CloseMessage, closeMsg, time.Now().Add(time.Second))
 		c.conn.Close()
 	}
 	c.connected = false
 	c.connMutex.Unlock()
+
+	// Cancel context to signal shutdown
+	c.cancel()
 
 	// Track disconnection
 	if wasConnected && c.monitor != nil {
