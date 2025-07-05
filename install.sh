@@ -23,11 +23,11 @@ error() {
 }
 
 success() {
-    echo -e "${GREEN}$1${NC}"
+    echo -e "${GREEN}$1${NC}" >&2
 }
 
 info() {
-    echo -e "${YELLOW}$1${NC}"
+    echo -e "${YELLOW}$1${NC}" >&2
 }
 
 # Detect OS and architecture
@@ -130,11 +130,11 @@ install_binary() {
     
     # Check if ~/.local/bin is in PATH
     if ! echo "$PATH" | grep -q "$HOME/.local/bin"; then
-        echo ""
+        echo "" >&2
         info "Note: $HOME/.local/bin is not in your PATH."
         info "Add this line to your shell configuration file (.bashrc, .zshrc, etc.):"
-        echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
-        echo ""
+        echo "  export PATH=\"\$HOME/.local/bin:\$PATH\"" >&2
+        echo "" >&2
     fi
 }
 
@@ -142,9 +142,9 @@ install_binary() {
 verify_installation() {
     if command -v "$BINARY_NAME" >/dev/null 2>&1; then
         success "LogMCP installed successfully!"
-        echo ""
-        "$BINARY_NAME" version
-        echo ""
+        echo "" >&2
+        "$BINARY_NAME" version >&2
+        echo "" >&2
         info "Run 'logmcp serve' to start the server"
     else
         error "Installation verification failed"
@@ -198,33 +198,33 @@ main() {
         VERSION="$1"
     fi
     
-    echo "LogMCP Installer"
-    echo "================"
-    echo ""
-    echo "⚠️  WARNING: This software is 100% AI-generated."
-    echo "   Use at your own risk. No warranty provided."
-    echo ""
+    echo "LogMCP Installer" >&2
+    echo "================" >&2
+    echo "" >&2
+    echo "⚠️  WARNING: This software is 100% AI-generated." >&2
+    echo "   Use at your own risk. No warranty provided." >&2
+    echo "" >&2
     
     # Check if we should skip confirmation (for CI or automated installs)
     if [ -n "$SKIP_CONFIRM" ] || [ "$LOGMCP_INSTALL_YES" = "true" ]; then
-        echo "Proceeding with installation (confirmation skipped)..."
+        echo "Proceeding with installation (confirmation skipped)..." >&2
     else
         # Try to read from terminal if available, otherwise skip confirmation
         if [ -t 0 ]; then
             read -p "Do you want to continue? (y/N) " -n 1 -r
-            echo
+            echo >&2
             if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                echo "Installation cancelled."
+                echo "Installation cancelled." >&2
                 exit 0
             fi
         else
-            echo "Running in non-interactive mode. To skip this prompt, use:"
-            echo "  curl -sSL https://raw.githubusercontent.com/bebsworthy/logmcp/main/install.sh | bash -s -- -y"
-            echo ""
-            echo "Or set environment variable:"
-            echo "  curl -sSL https://raw.githubusercontent.com/bebsworthy/logmcp/main/install.sh | LOGMCP_INSTALL_YES=true bash"
-            echo ""
-            echo "Installation cancelled. Run with -y flag or LOGMCP_INSTALL_YES=true to proceed."
+            echo "Running in non-interactive mode. To skip this prompt, use:" >&2
+            echo "  curl -sSL https://raw.githubusercontent.com/bebsworthy/logmcp/main/install.sh | bash -s -- -y" >&2
+            echo "" >&2
+            echo "Or set environment variable:" >&2
+            echo "  curl -sSL https://raw.githubusercontent.com/bebsworthy/logmcp/main/install.sh | LOGMCP_INSTALL_YES=true bash" >&2
+            echo "" >&2
+            echo "Installation cancelled. Run with -y flag or LOGMCP_INSTALL_YES=true to proceed." >&2
             exit 1
         fi
     fi
@@ -236,11 +236,11 @@ main() {
     install_binary "$BINARY_PATH"
     verify_installation
     
-    echo ""
-    echo "Next steps:"
-    echo "1. Start the server: logmcp serve"
-    echo "2. Run a process: logmcp run --label my-app -- <command>"
-    echo "3. Configure Claude Code: See https://github.com/${REPO}#claude-code-integration"
+    echo "" >&2
+    echo "Next steps:" >&2
+    echo "1. Start the server: logmcp serve" >&2
+    echo "2. Run a process: logmcp run --label my-app -- <command>" >&2
+    echo "3. Configure Claude Code: See https://github.com/${REPO}#claude-code-integration" >&2
 }
 
 # Run main function
