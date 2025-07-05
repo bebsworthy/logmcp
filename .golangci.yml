@@ -1,4 +1,7 @@
 # golangci-lint configuration
+# https://golangci-lint.run/usage/configuration/
+
+# version is required to determine the set of linters and settings
 version: "2"
 
 linters:

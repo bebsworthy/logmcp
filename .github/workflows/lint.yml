@@ -2,9 +2,9 @@ name: Lint
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 permissions:
   contents: read
@@ -14,14 +14,12 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-go@v5
         with:
           go-version: '1.23'
-
+          
       - name: Check formatting
         run: |
           if [ -n "$(gofmt -l .)" ]; then
@@ -31,9 +29,9 @@ jobs:
             echo "Run 'make fmt' to fix formatting issues"
             exit 1
           fi
-
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v3
+          
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          version: v2.1
           args: --timeout=5m
