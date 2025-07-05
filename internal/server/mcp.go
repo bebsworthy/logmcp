@@ -737,12 +737,17 @@ func (mcpSrv *MCPServer) startManagedProcess(session *Session, req protocol.Star
 	// Debug: Log process start
 	log.Printf("[DEBUG] Started process %s (PID %d) with command: %s %v", session.Label, cmd.Process.Pid, req.Command, req.Arguments)
 
+	// Create a WaitGroup to track stdout/stderr readers
+	var readersWg sync.WaitGroup
+	readersWg.Add(2)
+
 	// Start goroutines to read stdout/stderr
 	mcpSrv.wg.Add(3)
 
 	// Read stdout
 	go func() {
 		defer mcpSrv.wg.Done()
+		defer readersWg.Done()
 		defer func() {
 			if err := stdout.Close(); err != nil {
 				log.Printf("Failed to close stdout pipe: %v", err)
@@ -766,6 +771,7 @@ func (mcpSrv *MCPServer) startManagedProcess(session *Session, req protocol.Star
 	// Read stderr
 	go func() {
 		defer mcpSrv.wg.Done()
+		defer readersWg.Done()
 		defer func() {
 			if err := stderr.Close(); err != nil {
 				log.Printf("Failed to close stderr pipe: %v", err)
@@ -796,6 +802,9 @@ func (mcpSrv *MCPServer) startManagedProcess(session *Session, req protocol.Star
 		}()
 
 		err := cmd.Wait()
+		
+		// Wait for stdout/stderr readers to complete before updating status
+		readersWg.Wait()
 		exitCode := 0
 		var status protocol.SessionStatus
 
