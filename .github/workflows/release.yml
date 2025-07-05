@@ -20,6 +20,11 @@ jobs:
         with:
           go-version: '1.23'
 
+      - name: Build binary for tests
+        run: |
+          go build -o logmcp .
+          chmod +x logmcp
+
       - name: Run tests
         run: go test ./...
 
