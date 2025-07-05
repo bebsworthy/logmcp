@@ -486,26 +486,26 @@ func TestWebSocketServer_MultipleConnections(t *testing.T) {
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
 
 	numClients := 3
-	
+
 	// Phase synchronization barriers
 	connectBarrier := make(chan struct{})
 	registeredBarrier := make(chan struct{})
 	verifyDone := make(chan struct{})
-	
+
 	// Atomic counters for tracking progress
 	var connectedCount int32
 	var registeredCount int32
-	
+
 	// Error collection
 	errors := make(chan error, numClients)
-	
+
 	// Create multiple WebSocket clients
 	var wg sync.WaitGroup
 	for i := 0; i < numClients; i++ {
 		wg.Add(1)
 		go func(clientNum int) {
 			defer wg.Done()
-			
+
 			// Phase 1: Connect
 			client, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 			if err != nil {
@@ -513,15 +513,15 @@ func TestWebSocketServer_MultipleConnections(t *testing.T) {
 				return
 			}
 			defer client.Close()
-			
+
 			// Track connection
 			if atomic.AddInt32(&connectedCount, 1) == int32(numClients) {
 				close(connectBarrier)
 			}
-			
+
 			// Wait for all clients to connect
 			<-connectBarrier
-			
+
 			// Phase 2: Register session
 			regMsg := protocol.NewSessionRegistrationMessage(
 				fmt.Sprintf("backend-%d", clientNum),
@@ -535,7 +535,7 @@ func TestWebSocketServer_MultipleConnections(t *testing.T) {
 				errors <- fmt.Errorf("client %d serialize failed: %w", clientNum, err)
 				return
 			}
-			
+
 			if err := client.WriteMessage(websocket.TextMessage, msgData); err != nil {
 				errors <- fmt.Errorf("client %d write registration failed: %w", clientNum, err)
 				return
@@ -547,12 +547,12 @@ func TestWebSocketServer_MultipleConnections(t *testing.T) {
 				errors <- fmt.Errorf("client %d read ack failed: %w", clientNum, err)
 				return
 			}
-			
+
 			// Track registration
 			if atomic.AddInt32(&registeredCount, 1) == int32(numClients) {
 				close(registeredBarrier)
 			}
-			
+
 			// Wait for all clients to register
 			<-registeredBarrier
 
@@ -569,17 +569,17 @@ func TestWebSocketServer_MultipleConnections(t *testing.T) {
 				errors <- fmt.Errorf("client %d serialize log failed: %w", clientNum, err)
 				return
 			}
-			
+
 			if err := client.WriteMessage(websocket.TextMessage, msgData); err != nil {
 				errors <- fmt.Errorf("client %d write log failed: %w", clientNum, err)
 				return
 			}
-			
+
 			// Phase 4: Keep connection alive until verification is done
 			<-verifyDone
 		}(i)
 	}
-	
+
 	// Wait for all registrations to complete
 	select {
 	case <-registeredBarrier:
@@ -589,7 +589,7 @@ func TestWebSocketServer_MultipleConnections(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("Timeout waiting for clients to register")
 	}
-	
+
 	// NOW we can safely verify - all connections are established and registered
 	sessions := sm.ListSessions()
 	if len(sessions) != numClients {
@@ -608,13 +608,13 @@ func TestWebSocketServer_MultipleConnections(t *testing.T) {
 	if stats.RegisteredSessions != numClients {
 		t.Errorf("Expected %d registered sessions, got %d", numClients, stats.RegisteredSessions)
 	}
-	
+
 	// Signal goroutines they can now close
 	close(verifyDone)
-	
+
 	// Wait for all goroutines to complete
 	wg.Wait()
-	
+
 	// Check for any errors that occurred during execution
 	select {
 	case err := <-errors:
