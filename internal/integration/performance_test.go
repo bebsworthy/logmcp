@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/logmcp/logmcp/internal/protocol"
-	"github.com/logmcp/logmcp/internal/runner"
+	"github.com/bebsworthy/logmcp/internal/protocol"
+	"github.com/bebsworthy/logmcp/internal/runner"
 )
 
 // BenchmarkSingleClientThroughput benchmarks message throughput for a single client

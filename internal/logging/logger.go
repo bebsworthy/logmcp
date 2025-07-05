@@ -29,7 +29,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/logmcp/logmcp/internal/config"
+	"github.com/bebsworthy/logmcp/internal/config"
 )
 
 // CorrelationIDKey is the context key for correlation IDs

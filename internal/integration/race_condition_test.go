@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/logmcp/logmcp/internal/buffer"
-	"github.com/logmcp/logmcp/internal/protocol"
-	"github.com/logmcp/logmcp/internal/runner"
+	"github.com/bebsworthy/logmcp/internal/buffer"
+	"github.com/bebsworthy/logmcp/internal/protocol"
+	"github.com/bebsworthy/logmcp/internal/runner"
 )
 
 // TestRegistrationRaceCondition specifically tests the race condition found

@@ -7,7 +7,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/logmcp/logmcp/internal/protocol"
+	"github.com/bebsworthy/logmcp/internal/protocol"
 )
 
 // TestLogMCPError_Error tests error string formatting

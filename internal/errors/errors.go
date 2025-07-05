@@ -15,7 +15,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/logmcp/logmcp/internal/protocol"
+	"github.com/bebsworthy/logmcp/internal/protocol"
 )
 
 // ErrorType represents the category of error

@@ -39,9 +39,9 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/gorilla/websocket"
-	"github.com/logmcp/logmcp/internal/errors"
-	"github.com/logmcp/logmcp/internal/metrics"
-	"github.com/logmcp/logmcp/internal/protocol"
+	"github.com/bebsworthy/logmcp/internal/errors"
+	"github.com/bebsworthy/logmcp/internal/metrics"
+	"github.com/bebsworthy/logmcp/internal/protocol"
 )
 
 // registrationResponse holds the response from session registration

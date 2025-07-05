@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/logmcp/logmcp/internal/protocol"
+	"github.com/bebsworthy/logmcp/internal/protocol"
 )
 
 // ExampleSessionManager demonstrates basic usage of the SessionManager

@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/logmcp/logmcp/internal/config"
-	"github.com/logmcp/logmcp/internal/errors"
-	"github.com/logmcp/logmcp/internal/protocol"
+	"github.com/bebsworthy/logmcp/internal/config"
+	"github.com/bebsworthy/logmcp/internal/errors"
+	"github.com/bebsworthy/logmcp/internal/protocol"
 )
 
 // TestWebSocketClient_NewClient tests client creation

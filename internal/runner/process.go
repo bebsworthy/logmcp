@@ -35,9 +35,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/logmcp/logmcp/internal/config"
-	"github.com/logmcp/logmcp/internal/errors"
-	"github.com/logmcp/logmcp/internal/protocol"
+	"github.com/bebsworthy/logmcp/internal/config"
+	"github.com/bebsworthy/logmcp/internal/errors"
+	"github.com/bebsworthy/logmcp/internal/protocol"
 )
 
 // ProcessRunner manages process execution and log streaming

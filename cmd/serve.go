@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/logmcp/logmcp/internal/server"
+	"github.com/bebsworthy/logmcp/internal/server"
 )
 
 var (

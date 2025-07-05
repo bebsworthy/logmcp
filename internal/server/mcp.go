@@ -39,8 +39,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/logmcp/logmcp/internal/buffer"
-	"github.com/logmcp/logmcp/internal/protocol"
+	"github.com/bebsworthy/logmcp/internal/buffer"
+	"github.com/bebsworthy/logmcp/internal/protocol"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )

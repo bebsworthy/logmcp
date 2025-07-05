@@ -33,8 +33,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/logmcp/logmcp/internal/config"
-	"github.com/logmcp/logmcp/internal/errors"
+	"github.com/bebsworthy/logmcp/internal/config"
+	"github.com/bebsworthy/logmcp/internal/errors"
 )
 
 // SourceType represents the type of log source

@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/logmcp/logmcp/internal/errors"
-	"github.com/logmcp/logmcp/internal/protocol"
+	"github.com/bebsworthy/logmcp/internal/errors"
+	"github.com/bebsworthy/logmcp/internal/protocol"
 )
 
 // TestProcessRunner_NewProcessRunner tests process runner creation

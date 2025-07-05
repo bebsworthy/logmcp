@@ -1,0 +1,101 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Run tests
+        run: go test ./...
+
+      - name: Build binaries
+        run: |
+          # Get version info
+          BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%S)
+          GIT_COMMIT=$(git rev-parse --short HEAD)
+          
+          # Export for later steps
+          echo "BUILD_DATE=${BUILD_DATE}" >> $GITHUB_ENV
+          
+          # Build flags
+          LDFLAGS="-X github.com/bebsworthy/logmcp/cmd.BuildDate=${BUILD_DATE} -X github.com/bebsworthy/logmcp/cmd.GitCommit=${GIT_COMMIT}"
+          
+          # Build for multiple platforms
+          GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o logmcp-darwin-amd64 .
+          GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o logmcp-darwin-arm64 .
+          GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o logmcp-linux-amd64 .
+          GOOS=windows GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o logmcp-windows-amd64.exe .
+
+      - name: Create checksums
+        run: |
+          sha256sum logmcp-* > checksums.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.BUILD_DATE }}
+          name: Release ${{ env.BUILD_DATE }}
+          files: |
+            logmcp-darwin-amd64
+            logmcp-darwin-arm64
+            logmcp-linux-amd64
+            logmcp-windows-amd64.exe
+            checksums.txt
+          body: |
+            ## Installation
+
+            ### Download Binary
+            
+            Download the appropriate binary for your platform and make it executable:
+            
+            **macOS (Intel)**
+            ```bash
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/logmcp-darwin-amd64 -o logmcp
+            chmod +x logmcp
+            sudo mv logmcp /usr/local/bin/
+            ```
+            
+            **macOS (Apple Silicon)**
+            ```bash
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/logmcp-darwin-arm64 -o logmcp
+            chmod +x logmcp
+            sudo mv logmcp /usr/local/bin/
+            ```
+            
+            **Linux**
+            ```bash
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/logmcp-linux-amd64 -o logmcp
+            chmod +x logmcp
+            sudo mv logmcp /usr/local/bin/
+            ```
+            
+            **Windows**
+            
+            Download `logmcp-windows-amd64.exe` and add it to your PATH.
+            
+            ### Install Script
+            
+            ```bash
+            curl -sSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh | bash
+            ```
+            
+            ## Disclaimer
+            
+            ⚠️ This software is 100% AI-generated. Use at your own risk.
+          draft: false
+          prerelease: false

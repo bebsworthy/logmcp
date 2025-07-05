@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/logmcp/logmcp/internal/server"
+	"github.com/bebsworthy/logmcp/internal/server"
 )
 
 // ExampleWebSocketServer demonstrates basic WebSocket server usage

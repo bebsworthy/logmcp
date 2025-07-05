@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/logmcp/logmcp/internal/errors"
+	"github.com/bebsworthy/logmcp/internal/errors"
 )
 
 // TestLogForwarder_NewLogForwarder tests forwarder creation

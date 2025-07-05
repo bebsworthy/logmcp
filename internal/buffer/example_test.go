@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/logmcp/logmcp/internal/buffer"
-	"github.com/logmcp/logmcp/internal/protocol"
+	"github.com/bebsworthy/logmcp/internal/buffer"
+	"github.com/bebsworthy/logmcp/internal/protocol"
 )
 
 // ExampleRingBuffer demonstrates basic usage of the ring buffer

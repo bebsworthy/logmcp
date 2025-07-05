@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/logmcp/logmcp/internal/protocol"
-	"github.com/logmcp/logmcp/internal/runner"
-	"github.com/logmcp/logmcp/internal/server"
+	"github.com/bebsworthy/logmcp/internal/protocol"
+	"github.com/bebsworthy/logmcp/internal/runner"
+	"github.com/bebsworthy/logmcp/internal/server"
 )
 
 // ReceivedMessage tracks messages received by the test server

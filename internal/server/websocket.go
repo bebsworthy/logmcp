@@ -37,7 +37,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/logmcp/logmcp/internal/protocol"
+	"github.com/bebsworthy/logmcp/internal/protocol"
 )
 
 // WebSocketServer manages WebSocket connections and message routing

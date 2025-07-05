@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/logmcp/logmcp/internal/config"
-	"github.com/logmcp/logmcp/internal/runner"
+	"github.com/bebsworthy/logmcp/internal/config"
+	"github.com/bebsworthy/logmcp/internal/runner"
 )
 
 var (

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/logmcp/logmcp/internal/config"
+	"github.com/bebsworthy/logmcp/internal/config"
 )
 
 // TestNewLogger tests logger creation with different configurations

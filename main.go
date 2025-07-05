@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/logmcp/logmcp/cmd"
+	"github.com/bebsworthy/logmcp/cmd"
 )
 
 func main() {

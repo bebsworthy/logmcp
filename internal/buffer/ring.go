@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/logmcp/logmcp/internal/protocol"
+	"github.com/bebsworthy/logmcp/internal/protocol"
 )
 
 const (

@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/logmcp/logmcp/internal/buffer"
-	"github.com/logmcp/logmcp/internal/protocol"
+	"github.com/bebsworthy/logmcp/internal/buffer"
+	"github.com/bebsworthy/logmcp/internal/protocol"
 )
 
 // TestWebSocketServer_NewWebSocketServer tests WebSocket server creation

@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/logmcp/logmcp/internal/config"
+	"github.com/bebsworthy/logmcp/internal/config"
 )
 
 var (
@@ -27,7 +27,6 @@ streaming and process management capabilities for debugging and troubleshooting.
 
 It enables LLMs to observe and control processes through a unified interface with
 support for both local and remote log forwarding.`,
-	Version: "0.1.0",
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
