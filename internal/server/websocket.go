@@ -32,6 +32,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -132,7 +133,11 @@ func (ws *WebSocketServer) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 
 // handleConnection manages a single WebSocket connection
 func (ws *WebSocketServer) handleConnection(conn *websocket.Conn) {
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			slog.Error("Failed to close WebSocket connection", slog.String("error", err.Error()))
+		}
+	}()
 
 	// Initialize connection info
 	connInfo := &ConnectionInfo{
@@ -182,14 +187,14 @@ func (ws *WebSocketServer) handleConnection(conn *websocket.Conn) {
 func (ws *WebSocketServer) handleMessages(ctx context.Context, conn *websocket.Conn, connInfo *ConnectionInfo) {
 
 	// Set read deadline
-	conn.SetReadDeadline(time.Now().Add(ws.readTimeout))
+	_ = conn.SetReadDeadline(time.Now().Add(ws.readTimeout))
 
 	// Set pong handler
 	conn.SetPongHandler(func(string) error {
 		connInfo.mutex.Lock()
 		connInfo.LastPing = time.Now()
 		connInfo.mutex.Unlock()
-		conn.SetReadDeadline(time.Now().Add(ws.readTimeout))
+		_ = conn.SetReadDeadline(time.Now().Add(ws.readTimeout))
 		return nil
 	})
 
@@ -228,7 +233,7 @@ func (ws *WebSocketServer) handleMessages(ctx context.Context, conn *websocket.C
 			}
 
 			// Reset read deadline
-			conn.SetReadDeadline(time.Now().Add(ws.readTimeout))
+			_ = conn.SetReadDeadline(time.Now().Add(ws.readTimeout))
 		}
 	}
 }

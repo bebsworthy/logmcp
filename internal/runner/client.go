@@ -595,10 +595,18 @@ func (c *WebSocketClient) processMessage(message []byte) error {
 		if c.OnCommand != nil {
 			if err := c.OnCommand(string(m.Action), m.Signal); err != nil {
 				// Send error acknowledgment
-				c.SendAckMessage(m.CommandID, false, err.Error())
+				if ackErr := c.SendAckMessage(m.CommandID, false, err.Error()); ackErr != nil {
+					slog.Error("Failed to send error acknowledgment", 
+						slog.String("error", ackErr.Error()),
+						slog.String("command_id", m.CommandID))
+				}
 			} else {
 				// Send success acknowledgment
-				c.SendAckMessage(m.CommandID, true, "Command executed successfully")
+				if ackErr := c.SendAckMessage(m.CommandID, true, "Command executed successfully"); ackErr != nil {
+					slog.Error("Failed to send success acknowledgment",
+						slog.String("error", ackErr.Error()),
+						slog.String("command_id", m.CommandID))
+				}
 			}
 		}
 	case *protocol.StdinMessage:
@@ -687,7 +695,7 @@ func (c *WebSocketClient) handlePing() {
 				return
 			}
 
-			conn.SetWriteDeadline(time.Now().Add(c.writeTimeout))
+			_ = conn.SetWriteDeadline(time.Now().Add(c.writeTimeout))
 			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				if c.OnError != nil {
 					c.OnError(fmt.Errorf("ping error: %w", err))
@@ -741,7 +749,7 @@ func (c *WebSocketClient) Close() error {
 	if c.conn != nil {
 		// Send close message to server
 		closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "Client closing")
-		c.conn.WriteControl(websocket.CloseMessage, closeMsg, time.Now().Add(time.Second))
+		_ = c.conn.WriteControl(websocket.CloseMessage, closeMsg, time.Now().Add(time.Second))
 		_ = c.conn.Close()
 	}
 	c.connected = false

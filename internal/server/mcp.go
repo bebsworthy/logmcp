@@ -627,7 +627,10 @@ func (mcpSrv *MCPServer) handleStartProcess(ctx context.Context, request mcp.Cal
 	// Start the process
 	if err := mcpSrv.startManagedProcess(session, req); err != nil {
 		// Clean up session on failure
-		mcpSrv.sessionManager.RemoveSession(session.Label)
+		if err := mcpSrv.sessionManager.RemoveSession(session.Label); err != nil {
+			// Log error but continue cleanup
+			log.Printf("Failed to remove session %s: %v", session.Label, err)
+		}
 		return nil, fmt.Errorf("failed to start process: %w", err)
 	}
 
@@ -740,7 +743,11 @@ func (mcpSrv *MCPServer) startManagedProcess(session *Session, req protocol.Star
 	// Read stdout
 	go func() {
 		defer mcpSrv.wg.Done()
-		defer stdout.Close()
+		defer func() {
+			if err := stdout.Close(); err != nil {
+				log.Printf("Failed to close stdout pipe: %v", err)
+			}
+		}()
 
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
@@ -759,7 +766,11 @@ func (mcpSrv *MCPServer) startManagedProcess(session *Session, req protocol.Star
 	// Read stderr
 	go func() {
 		defer mcpSrv.wg.Done()
-		defer stderr.Close()
+		defer func() {
+			if err := stderr.Close(); err != nil {
+				log.Printf("Failed to close stderr pipe: %v", err)
+			}
+		}()
 
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
@@ -778,7 +789,11 @@ func (mcpSrv *MCPServer) startManagedProcess(session *Session, req protocol.Star
 	// Wait for process to complete
 	go func() {
 		defer mcpSrv.wg.Done()
-		defer stdin.Close()
+		defer func() {
+			if err := stdin.Close(); err != nil {
+				log.Printf("Failed to close stdin pipe: %v", err)
+			}
+		}()
 
 		err := cmd.Wait()
 		exitCode := 0
@@ -837,7 +852,9 @@ func (mcpSrv *MCPServer) startManagedProcess(session *Session, req protocol.Star
 		log.Printf("[DEBUG] Process %s (PID %d) completed with exit code %d, status: %s",
 			session.Label, session.PID, exitCode, status)
 
-		mcpSrv.sessionManager.UpdateSessionStatus(session.Label, status, session.PID, &exitCode)
+		if err := mcpSrv.sessionManager.UpdateSessionStatus(session.Label, status, session.PID, &exitCode); err != nil {
+			log.Printf("Failed to update session status for %s: %v", session.Label, err)
+		}
 
 		// Check restart policy
 		session.mutex.RLock()
@@ -870,7 +887,9 @@ func (mcpSrv *MCPServer) startManagedProcess(session *Session, req protocol.Star
 				if _, err := mcpSrv.restartProcess(session); err != nil {
 					log.Printf("[ERROR] Failed to restart process %s: %v", session.Label, err)
 					// Update status to crashed if restart fails
-					mcpSrv.sessionManager.UpdateSessionStatus(session.Label, protocol.StatusCrashed, 0, nil)
+					if err := mcpSrv.sessionManager.UpdateSessionStatus(session.Label, protocol.StatusCrashed, 0, nil); err != nil {
+						log.Printf("Failed to update session status to crashed for %s: %v", session.Label, err)
+					}
 				}
 			}
 		}
@@ -1029,7 +1048,7 @@ func (mcp *MCPServer) restartProcess(session *Session) (string, error) {
 		if err := process.Kill(); err != nil {
 			log.Printf("Warning: failed to kill process: %v", err)
 		}
-		process.Wait() // Wait for cleanup
+		_, _ = process.Wait() // Wait for cleanup
 	}
 
 	// Start new process (this will acquire its own session.mutex as needed)

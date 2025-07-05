@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -257,7 +258,11 @@ func (pr *ProcessRunner) Start() error {
 
 	// Send status update to server
 	if pr.client != nil {
-		pr.client.SendStatusMessage(protocol.StatusRunning, pr.pid, nil)
+		if err := pr.client.SendStatusMessage(protocol.StatusRunning, pr.pid, nil); err != nil {
+			slog.Warn("Failed to send status message", 
+				slog.String("label", pr.label),
+				slog.String("error", err.Error()))
+		}
 	}
 
 	// Start goroutines for I/O handling
@@ -281,7 +286,7 @@ func (pr *ProcessRunner) handleStdout() {
 	defer pr.wg.Done()
 	defer func() {
 		if pr.stdout != nil {
-			pr.stdout.Close()
+			_ = pr.stdout.Close()
 		}
 	}()
 

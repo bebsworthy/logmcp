@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -219,7 +220,7 @@ func (lf *LogForwarder) startFileForwarding() error {
 	// Get file info
 	fileInfo, err := file.Stat()
 	if err != nil {
-		file.Close()
+		_ = file.Close()
 		return fmt.Errorf("failed to stat file: %w", err)
 	}
 
@@ -228,7 +229,7 @@ func (lf *LogForwarder) startFileForwarding() error {
 
 	// Seek to end of file to start tailing
 	if _, err := file.Seek(0, io.SeekEnd); err != nil {
-		file.Close()
+		_ = file.Close()
 		return fmt.Errorf("failed to seek to end of file: %w", err)
 	}
 
@@ -292,7 +293,7 @@ func (lf *LogForwarder) tailFile() {
 	defer lf.wg.Done()
 	defer func() {
 		if lf.file != nil {
-			lf.file.Close()
+			_ = lf.file.Close()
 		}
 	}()
 
@@ -357,7 +358,7 @@ func (lf *LogForwarder) checkFileRotation() error {
 		// File was rotated, reopen
 		log.Printf("File rotation detected, reopening: %s", lf.source)
 
-		lf.file.Close()
+		_ = lf.file.Close()
 
 		newFile, err := os.Open(lf.source)
 		if err != nil {
@@ -420,7 +421,7 @@ func (lf *LogForwarder) readNamedPipe() {
 			for scanner.Scan() {
 				select {
 				case <-lf.ctx.Done():
-					file.Close()
+					_ = file.Close()
 					return
 				default:
 					line := scanner.Text()
@@ -434,7 +435,7 @@ func (lf *LogForwarder) readNamedPipe() {
 				}
 			}
 
-			file.Close()
+			_ = file.Close()
 
 			// Named pipes need to be reopened after EOF
 			time.Sleep(100 * time.Millisecond)
@@ -447,7 +448,11 @@ func (lf *LogForwarder) forwardLogLine(line string) {
 	// Send to WebSocket client
 	if lf.client != nil {
 		// For log forwarders, we don't have a real PID, so use 0
-		lf.client.SendLogMessage(line, "stdout", 0)
+		if err := lf.client.SendLogMessage(line, "stdout", 0); err != nil {
+			slog.Warn("Failed to send log message",
+				slog.String("label", lf.label),
+				slog.String("error", err.Error()))
+		}
 	}
 
 	// Call callback
@@ -470,7 +475,7 @@ func (lf *LogForwarder) Stop() error {
 
 	// Close file if open
 	if lf.file != nil {
-		lf.file.Close()
+		_ = lf.file.Close()
 		lf.file = nil
 	}
 

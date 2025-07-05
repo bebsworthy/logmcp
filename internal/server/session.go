@@ -399,7 +399,7 @@ func (sm *SessionManager) RemoveSession(label string) error {
 		session.LogBuffer.Close()
 	}
 	if session.Connection != nil {
-		session.Connection.Close()
+		_ = session.Connection.Close()
 	}
 	session.mutex.Unlock()
 
@@ -524,7 +524,7 @@ func (sm *SessionManager) removeSessionUnsafe(label string) {
 		session.LogBuffer.Close()
 	}
 	if session.Connection != nil {
-		session.Connection.Close()
+		_ = session.Connection.Close()
 	}
 	session.mutex.Unlock()
 
