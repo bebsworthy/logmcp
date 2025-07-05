@@ -62,24 +62,24 @@ func TestLogMCPServerDebug(t *testing.T) {
 	// Try to list tools with debug info
 	t.Log("Sending tools/list request...")
 	listRequest := mcp.ListToolsRequest{}
-	
+
 	result, err := mcpClient.ListTools(listCtx, listRequest)
 	if err != nil {
 		t.Logf("Failed to list tools: %v", err)
-		
+
 		// Try calling a tool directly to see if that works
 		t.Log("Trying to call list_sessions directly...")
 		callRequest := mcp.CallToolRequest{}
 		callRequest.Params.Name = "list_sessions"
 		callRequest.Params.Arguments = map[string]any{}
-		
+
 		callResult, callErr := mcpClient.CallTool(ctx, callRequest)
 		if callErr != nil {
 			t.Logf("Direct tool call also failed: %v", callErr)
 		} else {
 			t.Logf("Direct tool call succeeded! Result: %+v", callResult)
 		}
-		
+
 		t.Fatalf("tools/list failed but server seems to be running")
 	}
 

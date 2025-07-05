@@ -155,33 +155,33 @@ func TestGetLogs_PatternFiltering(t *testing.T) {
 
 	// Test various patterns
 	testCases := []struct {
-		name          string
-		pattern       string
-		shouldMatch   []string
+		name           string
+		pattern        string
+		shouldMatch    []string
 		shouldNotMatch []string
 	}{
 		{
-			name:          "Match tick messages",
-			pattern:       "Tick [0-9]+",
-			shouldMatch:   []string{"Tick"},
+			name:           "Match tick messages",
+			pattern:        "Tick [0-9]+",
+			shouldMatch:    []string{"Tick"},
 			shouldNotMatch: []string{"Hello", "Started"},
 		},
 		{
-			name:          "Match stdout messages",
-			pattern:       "Stdout message",
-			shouldMatch:   []string{"Stdout message"},
+			name:           "Match stdout messages",
+			pattern:        "Stdout message",
+			shouldMatch:    []string{"Stdout message"},
 			shouldNotMatch: []string{"Stderr message", "Tick"},
 		},
 		{
-			name:          "Match stderr messages",
-			pattern:       "Stderr message",
-			shouldMatch:   []string{"Stderr message"},
+			name:           "Match stderr messages",
+			pattern:        "Stderr message",
+			shouldMatch:    []string{"Stderr message"},
 			shouldNotMatch: []string{"Stdout message", "Tick"},
 		},
 		{
-			name:          "Match all messages",
-			pattern:       "message [0-9]+",
-			shouldMatch:   []string{"message"},
+			name:           "Match all messages",
+			pattern:        "message [0-9]+",
+			shouldMatch:    []string{"message"},
 			shouldNotMatch: []string{"Tick", "Started"},
 		},
 	}
@@ -213,7 +213,7 @@ func TestGetLogs_PatternFiltering(t *testing.T) {
 					}
 				}
 			}
-			
+
 			if len(logs) == 0 && len(tc.shouldMatch) > 0 {
 				t.Errorf("No logs matched pattern '%s'", tc.pattern)
 			}
@@ -335,7 +335,7 @@ func TestGetLogs_TimeFiltering(t *testing.T) {
 
 	// Mark a point in time (truncate to second boundary and add 1 second to ensure we only get future logs)
 	cutoffTime := time.Now().Truncate(time.Second).Add(1 * time.Second)
-	
+
 	// Wait for cutoff time to pass and more logs to be generated
 	time.Sleep(3 * time.Second)
 
@@ -354,10 +354,10 @@ func TestGetLogs_TimeFiltering(t *testing.T) {
 
 	// Verify we got fewer logs (should only have logs after cutoff)
 	if len(recentLogs) >= len(allLogs) {
-		t.Errorf("Expected fewer recent logs than all logs, got %d recent vs %d total", 
+		t.Errorf("Expected fewer recent logs than all logs, got %d recent vs %d total",
 			len(recentLogs), len(allLogs))
 	}
-	
+
 	// Should have at least some logs from the 2 second window
 	if len(recentLogs) == 0 {
 		t.Error("Expected some logs after cutoff time")
@@ -372,7 +372,7 @@ func TestGetLogs_TimeFiltering(t *testing.T) {
 		}
 		// Since we already adjusted cutoff time, just compare directly
 		if logTime.Before(cutoffTime) {
-			t.Errorf("Got log from before cutoff time: %s (cutoff was %s)", 
+			t.Errorf("Got log from before cutoff time: %s (cutoff was %s)",
 				log.Timestamp, cutoffTime.Format(time.RFC3339))
 		}
 	}
@@ -470,7 +470,7 @@ func TestGetLogs_MaxResultsAcrossSessions(t *testing.T) {
 	}
 
 	// Test max results across all sessions
-	maxResults := 30  // Increased to ensure we can get logs from multiple sessions
+	maxResults := 30 // Increased to ensure we can get logs from multiple sessions
 	logs, err := ts.GetLogs(sessions, WithMaxResults(maxResults))
 	if err != nil {
 		t.Fatalf("Failed to get logs with max results: %v", err)
@@ -533,17 +533,17 @@ func TestGetLogs_NonExistentSession(t *testing.T) {
 
 	// Try to get logs from non-existent session
 	logs, err := ts.GetLogs([]string{"non-existent"})
-	
+
 	// Should return an error for non-existent session
 	if err == nil {
 		t.Fatal("Expected error for non-existent session, got nil")
 	}
-	
+
 	// Error should mention the session not found
 	if !strings.Contains(err.Error(), "non-existent") || !strings.Contains(err.Error(), "not found") {
 		t.Errorf("Expected error mentioning 'non-existent' and 'not found', got: %v", err)
 	}
-	
+
 	// Logs should be empty when error occurs
 	if len(logs) != 0 {
 		t.Errorf("Expected no logs when error occurs, got %d", len(logs))
@@ -596,10 +596,10 @@ func TestGetLogs_CombinedFilters(t *testing.T) {
 
 	// Wait for initial logs
 	time.Sleep(2 * time.Second)
-	
+
 	// Mark cutoff time
 	cutoffTime := time.Now()
-	
+
 	// Wait for more logs after cutoff
 	time.Sleep(3 * time.Second)
 

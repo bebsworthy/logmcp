@@ -11,14 +11,13 @@
 //
 //	forwarder := runner.NewLogForwarder("/var/log/app.log", "app-logs")
 //	forwarder.SetWebSocketClient(client)
-//	
+//
 //	if err := forwarder.Start(); err != nil {
 //		log.Fatal(err)
 //	}
-//	
+//
 //	// Run until interrupted
 //	forwarder.Run()
-//
 package runner
 
 import (
@@ -54,27 +53,26 @@ type LogForwarder struct {
 	label      string
 
 	// State
-	running    bool
-	mutex      sync.RWMutex
+	running bool
+	mutex   sync.RWMutex
 
 	// File-specific state
-	file       *os.File
-	fileInfo   os.FileInfo
-	position   int64
+	file     *os.File
+	fileInfo os.FileInfo
 
 	// Context and lifecycle
-	ctx        context.Context
-	cancel     context.CancelFunc
-	wg         sync.WaitGroup
+	ctx    context.Context
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
 
 	// WebSocket client for log streaming
-	client     *WebSocketClient
+	client *WebSocketClient
 
 	// Configuration
-	pollInterval    time.Duration
-	bufferSize      int
-	maxLineLength   int
-	followRotation  bool
+	pollInterval   time.Duration
+	bufferSize     int
+	maxLineLength  int
+	followRotation bool
 
 	// Callbacks
 	OnLogLine func(content string)
@@ -353,14 +351,14 @@ func (lf *LogForwarder) checkFileRotation() error {
 	}
 
 	// Use cross-platform file comparison to detect rotation
-	// os.SameFile works on all platforms and handles both inode-based (Unix) 
+	// os.SameFile works on all platforms and handles both inode-based (Unix)
 	// and other file identification methods (Windows)
 	if !os.SameFile(currentInfo, diskInfo) {
 		// File was rotated, reopen
 		log.Printf("File rotation detected, reopening: %s", lf.source)
 
 		lf.file.Close()
-		
+
 		newFile, err := os.Open(lf.source)
 		if err != nil {
 			return fmt.Errorf("failed to reopen rotated file: %w", err)
@@ -490,7 +488,7 @@ func (lf *LogForwarder) Wait() error {
 func (lf *LogForwarder) Close() error {
 	// Always cancel context regardless of running state
 	lf.cancel()
-	
+
 	if err := lf.Stop(); err != nil {
 		return err
 	}

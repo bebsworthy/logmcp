@@ -14,7 +14,7 @@ import (
 func main() {
 	// Print startup diagnostics
 	fmt.Printf("STARTED: stdin_app with args: %v\n", os.Args[1:])
-	
+
 	// App that reads from stdin and logs the input
 	log.Println("Stdin app started")
 	fmt.Println("Ready to receive input. Type 'quit' to exit.")
@@ -26,13 +26,13 @@ func main() {
 	for scanner.Scan() {
 		lineCount++
 		input := scanner.Text()
-		
+
 		// Log to different streams based on input
 		log.Printf("Received input %d: %s", lineCount, input)
-		
+
 		// Echo to stdout
 		fmt.Printf("Echo: %s\n", input)
-		
+
 		// Process commands
 		switch strings.ToLower(strings.TrimSpace(input)) {
 		case "quit", "exit":
@@ -66,7 +66,7 @@ func main() {
 				}
 			}
 		}
-		
+
 		// Always prompt for next input
 		fmt.Print("> ")
 	}

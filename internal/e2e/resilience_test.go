@@ -84,7 +84,7 @@ func TestHighFrequencyLogging(t *testing.T) {
 
 	// Start multiple high-frequency logging processes
 	processes := []string{"rapid-1", "rapid-2", "rapid-3"}
-	
+
 	for i, label := range processes {
 		cmd := fmt.Sprintf(`for j in $(seq 1 50); do echo "[%s] Rapid log entry $j"; echo "[%s] Second line for entry $j" >&2; done`, label, label)
 		err := ts.StartTestProcess(label, "sh", "-c", cmd)
@@ -110,7 +110,7 @@ func TestHighFrequencyLogging(t *testing.T) {
 	for _, label := range processes {
 		foundStdout := false
 		foundStderr := false
-		
+
 		for _, log := range logs {
 			if log.Label == label {
 				if strings.Contains(log.Content, fmt.Sprintf("[%s] Rapid log entry", label)) {
@@ -121,7 +121,7 @@ func TestHighFrequencyLogging(t *testing.T) {
 				}
 			}
 		}
-		
+
 		if !foundStdout {
 			t.Errorf("Did not find stdout logs for %s", label)
 		}
@@ -173,12 +173,12 @@ func TestLongRunningProcessResilience(t *testing.T) {
 
 	// Wait and collect logs periodically
 	time.Sleep(5 * time.Second)
-	
+
 	logs1, err := ts.GetLogs([]string{"long-runner"})
 	if err != nil {
 		t.Fatalf("Failed to get logs (first check): %v", err)
 	}
-	
+
 	initialCount := len(logs1)
 	if initialCount < 4 {
 		t.Errorf("Expected at least 4 heartbeats, got %d", initialCount)
@@ -186,12 +186,12 @@ func TestLongRunningProcessResilience(t *testing.T) {
 
 	// Wait more and check logs increased
 	time.Sleep(5 * time.Second)
-	
+
 	logs2, err := ts.GetLogs([]string{"long-runner"})
 	if err != nil {
 		t.Fatalf("Failed to get logs (second check): %v", err)
 	}
-	
+
 	secondCount := len(logs2)
 	if secondCount <= initialCount {
 		t.Errorf("Expected more logs after waiting, got %d (was %d)", secondCount, initialCount)

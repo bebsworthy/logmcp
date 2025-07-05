@@ -1,0 +1,31 @@
+# golangci-lint configuration
+version: "2"
+
+linters:
+  enable:
+    - govet
+    - errcheck
+    - staticcheck
+    - ineffassign
+    - unused
+    - misspell
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    exclude-functions:
+      - io.Copy
+      - fmt.Printf
+      - fmt.Fprintf
+      - fmt.Fprintln
+
+issues:
+  exclude-rules:
+    # Exclude some linters from test files
+    - path: _test\.go
+      linters:
+        - errcheck
+
+run:
+  timeout: 5m
+  tests: true

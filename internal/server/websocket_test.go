@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"github.com/bebsworthy/logmcp/internal/buffer"
 	"github.com/bebsworthy/logmcp/internal/protocol"
+	"github.com/gorilla/websocket"
 )
 
 // TestWebSocketServer_NewWebSocketServer tests WebSocket server creation
@@ -485,7 +485,6 @@ func TestWebSocketServer_MultipleConnections(t *testing.T) {
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
 
 	// Create multiple WebSocket clients
-	var clients []*websocket.Conn
 	var wg sync.WaitGroup
 
 	numClients := 3
@@ -500,8 +499,6 @@ func TestWebSocketServer_MultipleConnections(t *testing.T) {
 				return
 			}
 			defer client.Close()
-
-			clients = append(clients, client)
 
 			// Register session
 			regMsg := protocol.NewSessionRegistrationMessage(
@@ -579,8 +576,6 @@ func TestWebSocketServer_LabelConflictResolution(t *testing.T) {
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
 
 	// Create multiple clients with same label
-	var clients []*websocket.Conn
-	var assignedLabels []string
 
 	numClients := 3
 	for i := 0; i < numClients; i++ {
@@ -589,8 +584,6 @@ func TestWebSocketServer_LabelConflictResolution(t *testing.T) {
 			t.Fatalf("Failed to connect client %d: %v", i, err)
 		}
 		defer client.Close()
-
-		clients = append(clients, client)
 
 		// Register session with same label
 		regMsg := protocol.NewSessionRegistrationMessage(
@@ -620,13 +613,9 @@ func TestWebSocketServer_LabelConflictResolution(t *testing.T) {
 			t.Fatalf("Expected AckMessage from client %d, got %T", i, ackMsg)
 		}
 
-		// Extract assigned label from message
-		if strings.Contains(ack.Message, "backend") {
-			assignedLabels = append(assignedLabels, "backend")
-		} else if strings.Contains(ack.Message, "backend-2") {
-			assignedLabels = append(assignedLabels, "backend-2")
-		} else if strings.Contains(ack.Message, "backend-3") {
-			assignedLabels = append(assignedLabels, "backend-3")
+		// Verify acknowledgment success
+		if !ack.Success {
+			t.Errorf("Client %d registration failed: %s", i, ack.Message)
 		}
 	}
 
@@ -660,7 +649,7 @@ func TestWebSocketServer_ConnectionCleanup(t *testing.T) {
 
 	// Create WebSocket server with shorter timeouts for testing
 	config := WebSocketServerConfig{
-		ReadTimeout:  2 * time.Second,  // Shorter timeout for testing
+		ReadTimeout:  2 * time.Second, // Shorter timeout for testing
 		WriteTimeout: 1 * time.Second,
 		PingInterval: 500 * time.Millisecond,
 		CheckOrigin:  nil,
@@ -719,12 +708,12 @@ func TestWebSocketServer_ConnectionCleanup(t *testing.T) {
 	startTime := time.Now()
 	timeout := time.Now().Add(15 * time.Second) // Increased from 5s to 15s
 	var connectionCleaned, sessionDisconnected bool
-	
+
 	t.Logf("Starting cleanup wait at %v", startTime)
-	
+
 	for time.Now().Before(timeout) {
 		elapsed := time.Since(startTime)
-		
+
 		// Check connection cleanup
 		if !connectionCleaned {
 			stats = ws.GetConnectionStats()
@@ -733,7 +722,7 @@ func TestWebSocketServer_ConnectionCleanup(t *testing.T) {
 				t.Logf("Connection cleanup completed after %v", elapsed)
 			}
 		}
-		
+
 		// Check session disconnection
 		if !sessionDisconnected {
 			if updatedSession, err := sm.GetSession(session.Label); err == nil {
@@ -743,16 +732,16 @@ func TestWebSocketServer_ConnectionCleanup(t *testing.T) {
 				}
 			}
 		}
-		
+
 		// If both conditions are met, break early
 		if connectionCleaned && sessionDisconnected {
 			t.Logf("Both cleanup conditions met after %v", elapsed)
 			break
 		}
-		
+
 		time.Sleep(100 * time.Millisecond)
 	}
-	
+
 	totalElapsed := time.Since(startTime)
 	t.Logf("Cleanup wait completed after %v", totalElapsed)
 
@@ -761,21 +750,21 @@ func TestWebSocketServer_ConnectionCleanup(t *testing.T) {
 	if !connectionCleaned {
 		t.Logf("Warning: Connection cleanup took longer than expected after %v (this may be due to test environment)", totalElapsed)
 	}
-	
+
 	if !sessionDisconnected {
 		t.Logf("Warning: Session disconnection took longer than expected after %v (this may be due to test environment)", totalElapsed)
 	}
-	
+
 	// Give it one more moment and check final state
 	finalWaitStart := time.Now()
 	time.Sleep(500 * time.Millisecond)
-	
+
 	// These checks are informational now
 	finalStats := ws.GetConnectionStats()
 	if finalStats.TotalConnections > 0 {
 		t.Logf("Final connection count after %v additional wait: %d (expected 0)", time.Since(finalWaitStart), finalStats.TotalConnections)
 	}
-	
+
 	if finalSession, err := sm.GetSession(session.Label); err == nil {
 		if finalSession.ConnectionStatus != ConnectionDisconnected {
 			t.Logf("Final session status after %v additional wait: %s (expected %s)", time.Since(finalWaitStart), finalSession.ConnectionStatus, ConnectionDisconnected)

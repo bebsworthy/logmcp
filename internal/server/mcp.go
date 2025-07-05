@@ -290,7 +290,7 @@ func (mcpSrv *MCPServer) handleListSessions(ctx context.Context, request mcp.Cal
 	}
 
 	response := protocol.NewListSessionsResponse(sessionInfos)
-	
+
 	// If no sessions, add helpful context
 	if len(sessionInfos) == 0 {
 		// Create a response with context hint
@@ -305,7 +305,7 @@ func (mcpSrv *MCPServer) handleListSessions(ctx context.Context, request mcp.Cal
 				ActiveCount int `json:"active_count"`
 			} `json:"meta"`
 		}
-		
+
 		contextResponse := ListSessionsWithContext{
 			Success: true,
 		}
@@ -313,12 +313,12 @@ func (mcpSrv *MCPServer) handleListSessions(ctx context.Context, request mcp.Cal
 		contextResponse.Data.Help = "No sessions found. Use 'start_process' to launch a new monitored process, or start a process with 'logmcp run <command>' from the command line."
 		contextResponse.Meta.TotalCount = 0
 		contextResponse.Meta.ActiveCount = 0
-		
+
 		resultJSON, err := json.MarshalIndent(contextResponse, "", "  ")
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal response: %w", err)
 		}
-		
+
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				mcp.TextContent{
@@ -328,7 +328,7 @@ func (mcpSrv *MCPServer) handleListSessions(ctx context.Context, request mcp.Cal
 			},
 		}, nil
 	}
-	
+
 	// Normal response with sessions
 	resultJSON, err := json.MarshalIndent(response, "", "  ")
 	if err != nil {
@@ -445,22 +445,22 @@ func (mcpSrv *MCPServer) handleGetLogs(ctx context.Context, request mcp.CallTool
 			continue
 		}
 
-			// Build query options
-			opts := buffer.GetOptions{
-				Lines:      *req.Lines,
-				Stream:     *req.Stream,
-				MaxResults: *req.MaxResults - totalResults,
-			}
+		// Build query options
+		opts := buffer.GetOptions{
+			Lines:      *req.Lines,
+			Stream:     *req.Stream,
+			MaxResults: *req.MaxResults - totalResults,
+		}
 
-			if req.Pattern != nil {
-				opts.Pattern = *req.Pattern
-			}
+		if req.Pattern != nil {
+			opts.Pattern = *req.Pattern
+		}
 
-			if req.Since != nil {
-				if sinceTime, err := time.Parse(time.RFC3339, *req.Since); err == nil {
-					opts.Since = sinceTime
-				}
+		if req.Since != nil {
+			if sinceTime, err := time.Parse(time.RFC3339, *req.Since); err == nil {
+				opts.Since = sinceTime
 			}
+		}
 
 		// Get logs from buffer
 		bufferLogs := session.LogBuffer.Get(opts)
@@ -600,7 +600,6 @@ func (mcpSrv *MCPServer) handleStartProcess(ctx context.Context, request mcp.Cal
 		defaultCollect := true
 		req.CollectStartupLogs = &defaultCollect
 	}
-	
 
 	// Create managed args
 	managedArgs := protocol.ManagedArgs{
@@ -788,21 +787,21 @@ func (mcpSrv *MCPServer) startManagedProcess(session *Session, req protocol.Star
 		if err != nil {
 			if exitError, ok := err.(*exec.ExitError); ok {
 				exitCode = exitError.ExitCode() // Will be -1 for signals
-				
+
 				// Get the underlying wait status for Unix systems
 				if ws, ok := exitError.Sys().(syscall.WaitStatus); ok {
 					if ws.Signaled() {
 						// Process was terminated by a signal
 						sig := ws.Signal()
-						log.Printf("[DEBUG] Process %s (PID %d) terminated by signal: %v", 
+						log.Printf("[DEBUG] Process %s (PID %d) terminated by signal: %v",
 							session.Label, session.PID, sig)
-						
+
 						// Classify signals
 						switch sig {
-						case syscall.SIGTERM,  // Polite termination request
-						     syscall.SIGINT,   // Ctrl+C
-						     syscall.SIGKILL,  // Force kill
-						     syscall.SIGHUP:   // Hangup
+						case syscall.SIGTERM, // Polite termination request
+							syscall.SIGINT,  // Ctrl+C
+							syscall.SIGKILL, // Force kill
+							syscall.SIGHUP:  // Hangup
 							status = protocol.StatusStopped
 						default:
 							// Includes SIGSEGV, SIGILL, SIGABRT, SIGFPE, SIGBUS, SIGTRAP, etc.
@@ -835,7 +834,7 @@ func (mcpSrv *MCPServer) startManagedProcess(session *Session, req protocol.Star
 			status = protocol.StatusStopped
 		}
 
-		log.Printf("[DEBUG] Process %s (PID %d) completed with exit code %d, status: %s", 
+		log.Printf("[DEBUG] Process %s (PID %d) completed with exit code %d, status: %s",
 			session.Label, session.PID, exitCode, status)
 
 		mcpSrv.sessionManager.UpdateSessionStatus(session.Label, status, session.PID, &exitCode)
@@ -847,7 +846,7 @@ func (mcpSrv *MCPServer) startManagedProcess(session *Session, req protocol.Star
 
 		if isManagedProcess && managedArgs.RestartPolicy != "" {
 			shouldRestart := false
-			
+
 			switch managedArgs.RestartPolicy {
 			case "always":
 				shouldRestart = true
@@ -855,7 +854,7 @@ func (mcpSrv *MCPServer) startManagedProcess(session *Session, req protocol.Star
 			case "on-failure":
 				if exitCode != 0 {
 					shouldRestart = true
-					log.Printf("[DEBUG] Process %s will restart (policy: on-failure, exit code: %d)", 
+					log.Printf("[DEBUG] Process %s will restart (policy: on-failure, exit code: %d)",
 						session.Label, exitCode)
 				}
 			case "never":
@@ -866,7 +865,7 @@ func (mcpSrv *MCPServer) startManagedProcess(session *Session, req protocol.Star
 			if shouldRestart {
 				// Small delay before restart to avoid tight loops
 				time.Sleep(1 * time.Second)
-				
+
 				// Trigger restart
 				if _, err := mcpSrv.restartProcess(session); err != nil {
 					log.Printf("[ERROR] Failed to restart process %s: %v", session.Label, err)
@@ -1159,7 +1158,7 @@ func (mcpSrv *MCPServer) handleSendStdin(ctx context.Context, request mcp.CallTo
 func (mcpSrv *MCPServer) handleGetHelp(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Get the system context from the GetMCPContext function
 	helpContent := GetMCPContext()
-	
+
 	// Prepare response
 	response := protocol.GetHelpResponse{
 		Success: true,
@@ -1169,13 +1168,13 @@ func (mcpSrv *MCPServer) handleGetHelp(ctx context.Context, request mcp.CallTool
 			Content: helpContent,
 		},
 	}
-	
+
 	// Serialize response
 	resultJSON, err := json.Marshal(response)
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize response: %w", err)
 	}
-	
+
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
 			mcp.TextContent{
@@ -1193,10 +1192,10 @@ func addContextToError(err error, toolName string) error {
 	if err == nil {
 		return nil
 	}
-	
+
 	errMsg := err.Error()
 	var hint string
-	
+
 	// Add context based on the error and tool
 	switch {
 	case strings.Contains(errMsg, "session not found"):
@@ -1212,7 +1211,7 @@ func addContextToError(err error, toolName string) error {
 	case toolName == "get_logs" && strings.Contains(errMsg, "labels"):
 		hint = " Call 'list_sessions' first to get valid session labels."
 	}
-	
+
 	if hint != "" {
 		return fmt.Errorf("%s%s", errMsg, hint)
 	}

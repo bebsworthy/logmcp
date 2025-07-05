@@ -176,38 +176,38 @@ func InternalError(code, message string, underlying error) *LogMCPError {
 
 var (
 	// Process errors
-	ErrProcessNotFound     = ProcessError(protocol.ErrorCodeProcessNotFound, "Process not found", nil)
-	ErrProcessFailed       = ProcessError(protocol.ErrorCodeProcessFailed, "Process execution failed", nil)
-	ErrProcessTimeout      = TimeoutError(protocol.ErrorCodeTimeout, "Process startup timeout", nil)
-	ErrProcessKilled       = ProcessError("PROCESS_KILLED", "Process was killed", nil)
-	ErrProcessExited       = ProcessError("PROCESS_EXITED", "Process exited unexpectedly", nil)
+	ErrProcessNotFound = ProcessError(protocol.ErrorCodeProcessNotFound, "Process not found", nil)
+	ErrProcessFailed   = ProcessError(protocol.ErrorCodeProcessFailed, "Process execution failed", nil)
+	ErrProcessTimeout  = TimeoutError(protocol.ErrorCodeTimeout, "Process startup timeout", nil)
+	ErrProcessKilled   = ProcessError("PROCESS_KILLED", "Process was killed", nil)
+	ErrProcessExited   = ProcessError("PROCESS_EXITED", "Process exited unexpectedly", nil)
 
 	// Network errors
-	ErrConnectionLost      = NetworkError(protocol.ErrorCodeConnectionLost, "Connection lost", nil)
-	ErrConnectionRefused   = NetworkError("CONNECTION_REFUSED", "Connection refused", nil)
-	ErrConnectionTimeout   = TimeoutError("CONNECTION_TIMEOUT", "Connection timeout", nil)
+	ErrConnectionLost    = NetworkError(protocol.ErrorCodeConnectionLost, "Connection lost", nil)
+	ErrConnectionRefused = NetworkError("CONNECTION_REFUSED", "Connection refused", nil)
+	ErrConnectionTimeout = TimeoutError("CONNECTION_TIMEOUT", "Connection timeout", nil)
 
 	// Session errors
-	ErrSessionNotFound     = SessionError(protocol.ErrorCodeSessionNotFound, "Session not found", nil)
-	ErrSessionExists       = SessionError("SESSION_EXISTS", "Session already exists", nil)
-	ErrSessionClosed       = SessionError("SESSION_CLOSED", "Session is closed", nil)
+	ErrSessionNotFound = SessionError(protocol.ErrorCodeSessionNotFound, "Session not found", nil)
+	ErrSessionExists   = SessionError("SESSION_EXISTS", "Session already exists", nil)
+	ErrSessionClosed   = SessionError("SESSION_CLOSED", "Session is closed", nil)
 
 	// Protocol errors
-	ErrInvalidMessage      = ProtocolError(protocol.ErrorCodeInvalidMessage, "Invalid message format", nil)
-	ErrInvalidCommand      = ProtocolError(protocol.ErrorCodeInvalidCommand, "Invalid command", nil)
+	ErrInvalidMessage        = ProtocolError(protocol.ErrorCodeInvalidMessage, "Invalid message format", nil)
+	ErrInvalidCommand        = ProtocolError(protocol.ErrorCodeInvalidCommand, "Invalid command", nil)
 	ErrUnsupportedCapability = ProtocolError(protocol.ErrorCodeCapabilityNotSupported, "Capability not supported", nil)
 
 	// File errors
-	ErrFileNotFound        = FileError("FILE_NOT_FOUND", "File not found", nil)
-	ErrFilePermission      = PermissionError("FILE_PERMISSION", "File permission denied", nil)
-	ErrFileRotated         = FileError("FILE_ROTATED", "File was rotated", nil)
+	ErrFileNotFound   = FileError("FILE_NOT_FOUND", "File not found", nil)
+	ErrFilePermission = PermissionError("FILE_PERMISSION", "File permission denied", nil)
+	ErrFileRotated    = FileError("FILE_ROTATED", "File was rotated", nil)
 
 	// Validation errors
-	ErrInvalidInput        = ValidationError("INVALID_INPUT", "Invalid input", nil)
-	ErrMissingRequired     = ValidationError("MISSING_REQUIRED", "Missing required field", nil)
+	ErrInvalidInput    = ValidationError("INVALID_INPUT", "Invalid input", nil)
+	ErrMissingRequired = ValidationError("MISSING_REQUIRED", "Missing required field", nil)
 
 	// Permission errors
-	ErrPermissionDenied    = PermissionError(protocol.ErrorCodePermissionDenied, "Permission denied", nil)
+	ErrPermissionDenied = PermissionError(protocol.ErrorCodePermissionDenied, "Permission denied", nil)
 
 	// Internal errors
 	ErrInternalServerError = InternalError(protocol.ErrorCodeInternalError, "Internal server error", nil)
@@ -334,10 +334,10 @@ func newErrorWithContext(ctx context.Context, errorType ErrorType, code, message
 		Timestamp:  time.Now(),
 		Details:    make(map[string]interface{}),
 	}
-	
+
 	// Capture stack trace
 	err.StackTrace = captureStackTrace(2) // Skip this function and the caller
-	
+
 	return err
 }
 
@@ -346,7 +346,7 @@ func captureStackTrace(skip int) []string {
 	var stack []string
 	pc := make([]uintptr, 16)
 	n := runtime.Callers(skip+1, pc)
-	
+
 	frames := runtime.CallersFrames(pc[:n])
 	for {
 		frame, more := frames.Next()
@@ -355,7 +355,7 @@ func captureStackTrace(skip int) []string {
 			break
 		}
 	}
-	
+
 	return stack
 }
 
@@ -436,16 +436,16 @@ func (e *LogMCPError) LogAttrs() []slog.Attr {
 		slog.String("error_message", e.Message),
 		slog.Time("error_timestamp", e.Timestamp),
 	}
-	
+
 	if e.Underlying != nil {
 		attrs = append(attrs, slog.String("underlying_error", e.Underlying.Error()))
 	}
-	
+
 	// Add details
 	for key, value := range e.Details {
 		attrs = append(attrs, slog.Any(fmt.Sprintf("error_detail_%s", key), value))
 	}
-	
+
 	// Add stack trace (first few frames only for brevity)
 	if len(e.StackTrace) > 0 {
 		maxFrames := 3
@@ -454,7 +454,7 @@ func (e *LogMCPError) LogAttrs() []slog.Attr {
 		}
 		attrs = append(attrs, slog.Any("error_stack", e.StackTrace[:maxFrames]))
 	}
-	
+
 	return attrs
 }
 
@@ -495,8 +495,8 @@ func RecoverError(ctx context.Context) *LogMCPError {
 		} else {
 			err = fmt.Errorf("panic: %v", r)
 		}
-		
-		return newErrorWithContext(ctx, ErrorTypeInternal, "PANIC_RECOVERED", 
+
+		return newErrorWithContext(ctx, ErrorTypeInternal, "PANIC_RECOVERED",
 			"Recovered from panic", err)
 	}
 	return nil
@@ -509,6 +509,6 @@ func WithRecover(ctx context.Context, fn func() error) (err error) {
 			err = recovered
 		}
 	}()
-	
+
 	return fn()
 }

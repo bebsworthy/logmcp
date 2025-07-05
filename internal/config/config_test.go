@@ -10,52 +10,52 @@ import (
 // TestDefaultConfig tests the default configuration
 func TestDefaultConfig(t *testing.T) {
 	config := DefaultConfig()
-	
+
 	if config == nil {
 		t.Fatal("Expected default config to be non-nil")
 	}
-	
+
 	// Test server defaults
 	if config.Server.Host != "localhost" {
 		t.Errorf("Expected default host 'localhost', got '%s'", config.Server.Host)
 	}
-	
+
 	if config.Server.WebSocketPort != 8765 {
 		t.Errorf("Expected default websocket port 8765, got %d", config.Server.WebSocketPort)
 	}
-	
+
 	if config.Server.MCPTransport != "stdio" {
 		t.Errorf("Expected default MCP transport 'stdio', got '%s'", config.Server.MCPTransport)
 	}
-	
+
 	// Test buffer defaults
 	if config.Buffer.MaxAge != 5*time.Minute {
 		t.Errorf("Expected default max age 5m, got %v", config.Buffer.MaxAge)
 	}
-	
+
 	if config.Buffer.MaxSize != "5MB" {
 		t.Errorf("Expected default max size '5MB', got '%s'", config.Buffer.MaxSize)
 	}
-	
+
 	// Test process defaults
 	if config.Process.Timeout != 30*time.Second {
 		t.Errorf("Expected default timeout 30s, got %v", config.Process.Timeout)
 	}
-	
+
 	if config.Process.MaxRestarts != 3 {
 		t.Errorf("Expected default max restarts 3, got %d", config.Process.MaxRestarts)
 	}
-	
+
 	// Test WebSocket defaults
 	if config.WebSocket.ReconnectMaxAttempts != 10 {
 		t.Errorf("Expected default max attempts 10, got %d", config.WebSocket.ReconnectMaxAttempts)
 	}
-	
+
 	// Test logging defaults
 	if config.Logging.Level != "info" {
 		t.Errorf("Expected default log level 'info', got '%s'", config.Logging.Level)
 	}
-	
+
 	if config.Logging.Format != "text" {
 		t.Errorf("Expected default log format 'text', got '%s'", config.Logging.Format)
 	}
@@ -68,17 +68,17 @@ func TestLoadConfig_NoFile(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error when specific config file doesn't exist")
 	}
-	
+
 	// Test 2: Empty config file path should use defaults
 	config, err := LoadConfig("")
 	if err != nil {
 		t.Fatalf("Expected no error when no config file specified, got %v", err)
 	}
-	
+
 	if config == nil {
 		t.Fatal("Expected config to be loaded with defaults")
 	}
-	
+
 	// Should have default values
 	if config.Server.Host != "localhost" {
 		t.Errorf("Expected default host, got '%s'", config.Server.Host)
@@ -93,7 +93,7 @@ func TestLoadConfig_WithFile(t *testing.T) {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 	defer os.Remove(tmpfile.Name())
-	
+
 	// Write test config
 	configContent := `
 server:
@@ -109,43 +109,43 @@ logging:
   level: "debug"
   verbose: true
 `
-	
+
 	if _, err := tmpfile.WriteString(configContent); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 	tmpfile.Close()
-	
+
 	// Load config
 	config, err := LoadConfig(tmpfile.Name())
 	if err != nil {
 		t.Fatalf("Failed to load config: %v", err)
 	}
-	
+
 	// Verify values were loaded
 	if config.Server.Host != "0.0.0.0" {
 		t.Errorf("Expected host '0.0.0.0', got '%s'", config.Server.Host)
 	}
-	
+
 	if config.Server.WebSocketPort != 9000 {
 		t.Errorf("Expected port 9000, got %d", config.Server.WebSocketPort)
 	}
-	
+
 	if config.Server.MCPTransport != "unix:/tmp/mcp.sock" {
 		t.Errorf("Expected MCP transport 'unix:/tmp/mcp.sock', got '%s'", config.Server.MCPTransport)
 	}
-	
+
 	if config.Buffer.MaxAge != 10*time.Minute {
 		t.Errorf("Expected max age 10m, got %v", config.Buffer.MaxAge)
 	}
-	
+
 	if config.Buffer.MaxSize != "10MB" {
 		t.Errorf("Expected max size '10MB', got '%s'", config.Buffer.MaxSize)
 	}
-	
+
 	if config.Logging.Level != "debug" {
 		t.Errorf("Expected log level 'debug', got '%s'", config.Logging.Level)
 	}
-	
+
 	if !config.Logging.Verbose {
 		t.Error("Expected verbose logging to be true")
 	}
@@ -159,13 +159,13 @@ func TestLoadConfig_InvalidFile(t *testing.T) {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 	defer os.Remove(tmpfile.Name())
-	
+
 	// Write invalid YAML
 	if _, err := tmpfile.WriteString("invalid: yaml: content:\n  - broken"); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 	tmpfile.Close()
-	
+
 	// Load config should fail
 	_, err = LoadConfig(tmpfile.Name())
 	if err == nil {
@@ -176,9 +176,9 @@ func TestLoadConfig_InvalidFile(t *testing.T) {
 // TestValidateConfig tests configuration validation
 func TestValidateConfig(t *testing.T) {
 	tests := []struct {
-		name        string
+		name         string
 		modifyConfig func(*Config)
-		expectError bool
+		expectError  bool
 	}{
 		{
 			name: "valid config",
@@ -258,18 +258,18 @@ func TestValidateConfig(t *testing.T) {
 			expectError: true,
 		},
 	}
-	
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			config := DefaultConfig()
 			test.modifyConfig(config)
-			
+
 			err := validateConfig(config)
-			
+
 			if test.expectError && err == nil {
 				t.Error("Expected validation error but got none")
 			}
-			
+
 			if !test.expectError && err != nil {
 				t.Errorf("Expected no validation error but got: %v", err)
 			}
@@ -290,19 +290,19 @@ func TestParseSize(t *testing.T) {
 		{"1GB", 1024 * 1024 * 1024, false},
 		{"5MB", 5 * 1024 * 1024, false},
 		{"64KB", 64 * 1024, false},
-		{"1", 1, false}, // No unit = bytes
+		{"1", 1, false},      // No unit = bytes
 		{"1kb", 1024, false}, // Case insensitive
 		{"1mb", 1024 * 1024, false},
-		{"", 0, true}, // Empty string
+		{"", 0, true},        // Empty string
 		{"invalid", 0, true}, // Invalid format
-		{"-1MB", 0, true}, // Negative value
-		{"1.5MB", 0, true}, // Float value
+		{"-1MB", 0, true},    // Negative value
+		{"1.5MB", 0, true},   // Float value
 	}
-	
+
 	for _, test := range tests {
 		t.Run(test.input, func(t *testing.T) {
 			result, err := ParseSize(test.input)
-			
+
 			if test.hasError {
 				if err == nil {
 					t.Errorf("Expected error for input '%s'", test.input)
@@ -321,11 +321,11 @@ func TestParseSize(t *testing.T) {
 // TestGetConfigPaths tests config path discovery
 func TestGetConfigPaths(t *testing.T) {
 	paths := GetConfigPaths()
-	
+
 	if len(paths) == 0 {
 		t.Error("Expected at least some config paths")
 	}
-	
+
 	// Should include current directory
 	found := false
 	for _, path := range paths {
@@ -334,7 +334,7 @@ func TestGetConfigPaths(t *testing.T) {
 			break
 		}
 	}
-	
+
 	if !found {
 		t.Error("Expected current directory to be in config paths")
 	}
@@ -351,7 +351,7 @@ func TestGetEnvVarName(t *testing.T) {
 		{"buffer.max_age", "LOGMCP_BUFFER_MAX_AGE"},
 		{"logging.level", "LOGMCP_LOGGING_LEVEL"},
 	}
-	
+
 	for _, test := range tests {
 		result := GetEnvVarName(test.input)
 		if result != test.expected {
@@ -363,28 +363,28 @@ func TestGetEnvVarName(t *testing.T) {
 // TestExampleConfig tests the example configuration
 func TestExampleConfig(t *testing.T) {
 	config := ExampleConfig()
-	
+
 	if config == nil {
 		t.Fatal("Expected example config to be non-nil")
 	}
-	
+
 	// Example config should have some different values from defaults
 	if config.Server.Host != "0.0.0.0" {
 		t.Errorf("Expected example host '0.0.0.0', got '%s'", config.Server.Host)
 	}
-	
+
 	if config.Logging.Level != "debug" {
 		t.Errorf("Expected example log level 'debug', got '%s'", config.Logging.Level)
 	}
-	
+
 	if !config.Logging.Verbose {
 		t.Error("Expected example verbose logging to be true")
 	}
-	
+
 	if !config.Development.DebugMode {
 		t.Error("Expected example debug mode to be true")
 	}
-	
+
 	// Should still be valid
 	if err := validateConfig(config); err != nil {
 		t.Errorf("Example config should be valid: %v", err)
@@ -395,37 +395,37 @@ func TestExampleConfig(t *testing.T) {
 func TestEnvironmentVariables(t *testing.T) {
 	// Set test environment variables
 	testEnvVars := map[string]string{
-		"LOGMCP_SERVER_HOST":             "test-host",
-		"LOGMCP_SERVER_WEBSOCKET_PORT":   "9999",
-		"LOGMCP_LOGGING_LEVEL":           "debug",
-		"LOGMCP_LOGGING_VERBOSE":         "true",
+		"LOGMCP_SERVER_HOST":           "test-host",
+		"LOGMCP_SERVER_WEBSOCKET_PORT": "9999",
+		"LOGMCP_LOGGING_LEVEL":         "debug",
+		"LOGMCP_LOGGING_VERBOSE":       "true",
 	}
-	
+
 	// Set environment variables
 	for key, value := range testEnvVars {
 		os.Setenv(key, value)
 		defer os.Unsetenv(key)
 	}
-	
+
 	// Load config (no file)
 	config, err := LoadConfig("")
 	if err != nil {
 		t.Fatalf("Failed to load config: %v", err)
 	}
-	
+
 	// Verify environment variables were used
 	if config.Server.Host != "test-host" {
 		t.Errorf("Expected host 'test-host', got '%s'", config.Server.Host)
 	}
-	
+
 	if config.Server.WebSocketPort != 9999 {
 		t.Errorf("Expected port 9999, got %d", config.Server.WebSocketPort)
 	}
-	
+
 	if config.Logging.Level != "debug" {
 		t.Errorf("Expected log level 'debug', got '%s'", config.Logging.Level)
 	}
-	
+
 	if !config.Logging.Verbose {
 		t.Error("Expected verbose logging to be true")
 	}

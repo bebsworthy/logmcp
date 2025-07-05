@@ -185,19 +185,19 @@ type ListSessionsResponse struct {
 
 // SessionInfo represents information about a session
 type SessionInfo struct {
-	Label       string                 `json:"label"`
-	Status      SessionStatus          `json:"status"`
-	PID         *int                   `json:"pid"`
-	Command     string                 `json:"command"`
-	WorkingDir  string                 `json:"working_dir"`
-	StartTime   time.Time              `json:"start_time"`
-	ExitTime    *time.Time             `json:"exit_time"`
-	LogCount    int                    `json:"log_count"`
-	BufferSize  string                 `json:"buffer_size"`
-	ExitCode    *int                   `json:"exit_code"`
-	RunnerMode  RunnerMode             `json:"runner_mode"`
-	RunnerArgs  map[string]interface{} `json:"runner_args"`
-	Capabilities []string              `json:"capabilities,omitempty"`
+	Label        string                 `json:"label"`
+	Status       SessionStatus          `json:"status"`
+	PID          *int                   `json:"pid"`
+	Command      string                 `json:"command"`
+	WorkingDir   string                 `json:"working_dir"`
+	StartTime    time.Time              `json:"start_time"`
+	ExitTime     *time.Time             `json:"exit_time"`
+	LogCount     int                    `json:"log_count"`
+	BufferSize   string                 `json:"buffer_size"`
+	ExitCode     *int                   `json:"exit_code"`
+	RunnerMode   RunnerMode             `json:"runner_mode"`
+	RunnerArgs   map[string]interface{} `json:"runner_args"`
+	Capabilities []string               `json:"capabilities,omitempty"`
 }
 
 // GetLogsRequest represents a request to get logs
@@ -217,21 +217,21 @@ type GetLogsResponse struct {
 		Logs []LogEntry `json:"logs"`
 	} `json:"data"`
 	Meta struct {
-		TotalResults      int         `json:"total_results"`
-		Truncated         bool        `json:"truncated"`
-		SessionsQueried   []string    `json:"sessions_queried"`
-		SessionsNotFound  []string    `json:"sessions_not_found"`
-		TimeRange         *TimeRange  `json:"time_range,omitempty"`
+		TotalResults     int        `json:"total_results"`
+		Truncated        bool       `json:"truncated"`
+		SessionsQueried  []string   `json:"sessions_queried"`
+		SessionsNotFound []string   `json:"sessions_not_found"`
+		TimeRange        *TimeRange `json:"time_range,omitempty"`
 	} `json:"meta"`
 }
 
 // LogEntry represents a single log entry
 type LogEntry struct {
-	Label     string    `json:"label"`
-	Content   string    `json:"content"`
-	Timestamp time.Time `json:"timestamp"`
+	Label     string     `json:"label"`
+	Content   string     `json:"content"`
+	Timestamp time.Time  `json:"timestamp"`
 	Stream    StreamType `json:"stream"`
-	PID       int       `json:"pid"`
+	PID       int        `json:"pid"`
 }
 
 // TimeRange represents a time range for log queries
@@ -339,7 +339,7 @@ func NewListSessionsResponse(sessions []SessionInfo) *ListSessionsResponse {
 	}
 	response.Data.Sessions = sessions
 	response.Meta.TotalCount = len(sessions)
-	
+
 	activeCount := 0
 	for _, session := range sessions {
 		if session.Status == StatusRunning {
@@ -347,7 +347,7 @@ func NewListSessionsResponse(sessions []SessionInfo) *ListSessionsResponse {
 		}
 	}
 	response.Meta.ActiveCount = activeCount
-	
+
 	return response
 }
 
@@ -361,11 +361,11 @@ func NewGetLogsResponse(logs []LogEntry, queriedSessions, notFoundSessions []str
 	response.Meta.Truncated = truncated
 	response.Meta.SessionsQueried = queriedSessions
 	response.Meta.SessionsNotFound = notFoundSessions
-	
+
 	if len(logs) > 0 {
 		oldest := logs[0].Timestamp
 		newest := logs[0].Timestamp
-		
+
 		for _, log := range logs {
 			if log.Timestamp.Before(oldest) {
 				oldest = log.Timestamp
@@ -374,13 +374,13 @@ func NewGetLogsResponse(logs []LogEntry, queriedSessions, notFoundSessions []str
 				newest = log.Timestamp
 			}
 		}
-		
+
 		response.Meta.TimeRange = &TimeRange{
 			Oldest: oldest,
 			Newest: newest,
 		}
 	}
-	
+
 	return response
 }
 
@@ -446,35 +446,35 @@ func ParseMCPRequest(toolName string, data []byte) (interface{}, error) {
 			return nil, err
 		}
 		return &req, nil
-		
+
 	case "get_logs":
 		var req GetLogsRequest
 		if err := json.Unmarshal(data, &req); err != nil {
 			return nil, err
 		}
 		return &req, nil
-		
+
 	case "start_process":
 		var req StartProcessRequest
 		if err := json.Unmarshal(data, &req); err != nil {
 			return nil, err
 		}
 		return &req, nil
-		
+
 	case "control_process":
 		var req ControlProcessRequest
 		if err := json.Unmarshal(data, &req); err != nil {
 			return nil, err
 		}
 		return &req, nil
-		
+
 	case "send_stdin":
 		var req SendStdinRequest
 		if err := json.Unmarshal(data, &req); err != nil {
 			return nil, err
 		}
 		return &req, nil
-		
+
 	default:
 		return nil, json.Unmarshal(data, &map[string]interface{}{})
 	}
@@ -497,7 +497,7 @@ func ValidateMCPRequest(toolName string, req interface{}) error {
 				return fmt.Errorf("stream must be stdout, stderr, or both")
 			}
 		}
-		
+
 	case "start_process":
 		if r, ok := req.(*StartProcessRequest); ok {
 			if r.Command == "" {
@@ -512,7 +512,7 @@ func ValidateMCPRequest(toolName string, req interface{}) error {
 				}
 			}
 		}
-		
+
 	case "control_process":
 		if r, ok := req.(*ControlProcessRequest); ok {
 			if r.Label == "" {
@@ -541,7 +541,7 @@ func ValidateMCPRequest(toolName string, req interface{}) error {
 				}
 			}
 		}
-		
+
 	case "send_stdin":
 		if r, ok := req.(*SendStdinRequest); ok {
 			if r.Label == "" {
@@ -552,6 +552,6 @@ func ValidateMCPRequest(toolName string, req interface{}) error {
 			}
 		}
 	}
-	
+
 	return nil
 }

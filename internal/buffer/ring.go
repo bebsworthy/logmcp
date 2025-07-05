@@ -13,13 +13,13 @@ import (
 const (
 	// MaxBufferSize is the maximum size of the ring buffer in bytes (5MB)
 	MaxBufferSize = 5 * 1024 * 1024
-	
+
 	// MaxBufferAge is the maximum age of log entries in the buffer (5 minutes)
 	MaxBufferAge = 5 * time.Minute
-	
+
 	// MaxLineSize is the maximum size of a single log line (64KB)
 	MaxLineSize = 64 * 1024
-	
+
 	// CleanupInterval is how often the background cleanup runs (30 seconds)
 	CleanupInterval = 30 * time.Second
 )
@@ -40,7 +40,7 @@ func NewLogEntry(msg *protocol.LogMessage) *LogEntry {
 	if len(content) > MaxLineSize {
 		content = content[:MaxLineSize]
 	}
-	
+
 	return &LogEntry{
 		Label:     msg.Label,
 		Content:   content,
@@ -61,33 +61,33 @@ func (e *LogEntry) Matches(stream protocol.StreamType, pattern *regexp.Regexp) b
 	if stream != "" && stream != "both" && e.Stream != stream {
 		return false
 	}
-	
+
 	// Check pattern filter
 	if pattern != nil && !pattern.MatchString(e.Content) {
 		return false
 	}
-	
+
 	return true
 }
 
 // RingBuffer is a thread-safe ring buffer for log entries with size and time limits
 type RingBuffer struct {
-	mutex      sync.RWMutex
-	entries    []*LogEntry
-	head       int  // Points to the next position to write
-	tail       int  // Points to the oldest entry
-	size       int  // Number of entries in the buffer
-	capacity   int  // Maximum number of entries
-	totalSize  int  // Total size in bytes
-	ctx        context.Context
-	cancel     context.CancelFunc
-	cleanupWg  sync.WaitGroup
+	mutex     sync.RWMutex
+	entries   []*LogEntry
+	head      int // Points to the next position to write
+	tail      int // Points to the oldest entry
+	size      int // Number of entries in the buffer
+	capacity  int // Maximum number of entries
+	totalSize int // Total size in bytes
+	ctx       context.Context
+	cancel    context.CancelFunc
+	cleanupWg sync.WaitGroup
 }
 
 // NewRingBuffer creates a new ring buffer with the specified capacity
 func NewRingBuffer(capacity int) *RingBuffer {
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	rb := &RingBuffer{
 		entries:  make([]*LogEntry, capacity),
 		head:     0,
@@ -97,11 +97,11 @@ func NewRingBuffer(capacity int) *RingBuffer {
 		ctx:      ctx,
 		cancel:   cancel,
 	}
-	
+
 	// Start background cleanup goroutine
 	rb.cleanupWg.Add(1)
 	go rb.backgroundCleanup()
-	
+
 	return rb
 }
 
@@ -115,9 +115,9 @@ func NewDefaultRingBuffer() *RingBuffer {
 func (rb *RingBuffer) Add(entry *LogEntry) {
 	rb.mutex.Lock()
 	defer rb.mutex.Unlock()
-	
+
 	rb.addUnsafe(entry)
-	
+
 	// Check if we need to evict entries due to size limit
 	rb.evictBySizeUnsafe()
 }
@@ -131,12 +131,12 @@ func (rb *RingBuffer) AddFromMessage(msg *protocol.LogMessage) {
 // addUnsafe adds an entry without locking (internal use)
 func (rb *RingBuffer) addUnsafe(entry *LogEntry) {
 	entrySize := entry.Size()
-	
+
 	// Add the entry
 	rb.entries[rb.head] = entry
 	rb.head = (rb.head + 1) % rb.capacity
 	rb.totalSize += entrySize
-	
+
 	// If buffer is full, advance tail
 	if rb.size == rb.capacity {
 		// Remove the old entry at tail
@@ -168,13 +168,13 @@ func (rb *RingBuffer) evictBySizeUnsafe() {
 func (rb *RingBuffer) evictByTimeUnsafe() {
 	now := time.Now()
 	cutoff := now.Add(-MaxBufferAge)
-	
+
 	for rb.size > 0 {
 		entry := rb.entries[rb.tail]
 		if entry == nil || entry.Timestamp.After(cutoff) {
 			break
 		}
-		
+
 		// Remove the old entry
 		rb.totalSize -= entry.Size()
 		rb.entries[rb.tail] = nil
@@ -186,10 +186,10 @@ func (rb *RingBuffer) evictByTimeUnsafe() {
 // backgroundCleanup runs time-based eviction in the background
 func (rb *RingBuffer) backgroundCleanup() {
 	defer rb.cleanupWg.Done()
-	
+
 	ticker := time.NewTicker(CleanupInterval)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-rb.ctx.Done():
@@ -206,14 +206,14 @@ func (rb *RingBuffer) backgroundCleanup() {
 func (rb *RingBuffer) Get(opts GetOptions) []*LogEntry {
 	rb.mutex.RLock()
 	defer rb.mutex.RUnlock()
-	
+
 	var result []*LogEntry
-	
+
 	// If no entries, return empty slice
 	if rb.size == 0 {
 		return result
 	}
-	
+
 	// Compile regex pattern if provided
 	var pattern *regexp.Regexp
 	if opts.Pattern != "" {
@@ -224,16 +224,16 @@ func (rb *RingBuffer) Get(opts GetOptions) []*LogEntry {
 			return result
 		}
 	}
-	
+
 	// Convert stream filter
 	streamFilter := protocol.StreamType("")
 	if opts.Stream != "" {
 		streamFilter = protocol.StreamType(opts.Stream)
 	}
-	
+
 	// Collect entries
 	entries := rb.getAllEntriesUnsafe()
-	
+
 	// Apply time filter
 	if !opts.Since.IsZero() {
 		var filteredEntries []*LogEntry
@@ -244,24 +244,24 @@ func (rb *RingBuffer) Get(opts GetOptions) []*LogEntry {
 		}
 		entries = filteredEntries
 	}
-	
+
 	// Apply stream and pattern filters
 	for _, entry := range entries {
 		if entry.Matches(streamFilter, pattern) {
 			result = append(result, entry)
 		}
 	}
-	
+
 	// Apply line limit (take the last N entries)
 	if opts.Lines > 0 && len(result) > opts.Lines {
 		result = result[len(result)-opts.Lines:]
 	}
-	
+
 	// Apply max results limit
 	if opts.MaxResults > 0 && len(result) > opts.MaxResults {
 		result = result[len(result)-opts.MaxResults:]
 	}
-	
+
 	return result
 }
 
@@ -270,9 +270,9 @@ func (rb *RingBuffer) getAllEntriesUnsafe() []*LogEntry {
 	if rb.size == 0 {
 		return nil
 	}
-	
+
 	result := make([]*LogEntry, 0, rb.size)
-	
+
 	// Start from tail (oldest) and go to head (newest)
 	for i := 0; i < rb.size; i++ {
 		idx := (rb.tail + i) % rb.capacity
@@ -280,7 +280,7 @@ func (rb *RingBuffer) getAllEntriesUnsafe() []*LogEntry {
 			result = append(result, rb.entries[idx])
 		}
 	}
-	
+
 	return result
 }
 
@@ -288,22 +288,22 @@ func (rb *RingBuffer) getAllEntriesUnsafe() []*LogEntry {
 func (rb *RingBuffer) GetByTimeRange(start, end time.Time) []*LogEntry {
 	rb.mutex.RLock()
 	defer rb.mutex.RUnlock()
-	
+
 	var result []*LogEntry
-	
+
 	if rb.size == 0 {
 		return result
 	}
-	
+
 	entries := rb.getAllEntriesUnsafe()
-	
+
 	for _, entry := range entries {
 		if (entry.Timestamp.After(start) || entry.Timestamp.Equal(start)) &&
 			(entry.Timestamp.Before(end) || entry.Timestamp.Equal(end)) {
 			result = append(result, entry)
 		}
 	}
-	
+
 	return result
 }
 
@@ -313,24 +313,24 @@ func (rb *RingBuffer) Search(pattern string) ([]*LogEntry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid regex pattern: %w", err)
 	}
-	
+
 	rb.mutex.RLock()
 	defer rb.mutex.RUnlock()
-	
+
 	var result []*LogEntry
-	
+
 	if rb.size == 0 {
 		return result, nil
 	}
-	
+
 	entries := rb.getAllEntriesUnsafe()
-	
+
 	for _, entry := range entries {
 		if regex.MatchString(entry.Content) {
 			result = append(result, entry)
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -338,9 +338,9 @@ func (rb *RingBuffer) Search(pattern string) ([]*LogEntry, error) {
 func (rb *RingBuffer) GetStats() Stats {
 	rb.mutex.RLock()
 	defer rb.mutex.RUnlock()
-	
+
 	var oldestTimestamp, newestTimestamp *time.Time
-	
+
 	if rb.size > 0 {
 		entries := rb.getAllEntriesUnsafe()
 		if len(entries) > 0 {
@@ -348,7 +348,7 @@ func (rb *RingBuffer) GetStats() Stats {
 			newestTimestamp = &entries[len(entries)-1].Timestamp
 		}
 	}
-	
+
 	return Stats{
 		EntryCount:       rb.size,
 		TotalSizeBytes:   rb.totalSize,
@@ -363,11 +363,11 @@ func (rb *RingBuffer) GetStats() Stats {
 func (rb *RingBuffer) Clear() {
 	rb.mutex.Lock()
 	defer rb.mutex.Unlock()
-	
+
 	for i := 0; i < rb.capacity; i++ {
 		rb.entries[i] = nil
 	}
-	
+
 	rb.head = 0
 	rb.tail = 0
 	rb.size = 0
@@ -382,11 +382,11 @@ func (rb *RingBuffer) Close() {
 
 // GetOptions represents options for retrieving log entries
 type GetOptions struct {
-	Lines      int                 // Maximum number of lines to return (0 = no limit)
-	Since      time.Time          // Only return entries after this timestamp
-	Stream     string             // Filter by stream type ("stdout", "stderr", "both", or "")
-	Pattern    string             // Regex pattern to match against log content
-	MaxResults int                // Maximum number of results to return (0 = no limit)
+	Lines      int       // Maximum number of lines to return (0 = no limit)
+	Since      time.Time // Only return entries after this timestamp
+	Stream     string    // Filter by stream type ("stdout", "stderr", "both", or "")
+	Pattern    string    // Regex pattern to match against log content
+	MaxResults int       // Maximum number of results to return (0 = no limit)
 }
 
 // Stats represents statistics about the ring buffer
@@ -404,7 +404,7 @@ func (s Stats) String() string {
 	if s.EntryCount == 0 {
 		return "Ring buffer is empty"
 	}
-	
+
 	return fmt.Sprintf("Ring buffer: %d/%d entries, %d bytes, oldest: %v, newest: %v",
 		s.EntryCount, s.Capacity, s.TotalSizeBytes,
 		s.OldestTimestamp, s.NewestTimestamp)

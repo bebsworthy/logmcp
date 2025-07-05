@@ -65,7 +65,7 @@ func TestLogEntry_NewLogEntry(t *testing.T) {
 func TestLogEntry_NewLogEntry_ContentTruncation(t *testing.T) {
 	// Create content that exceeds MaxLineSize
 	longContent := strings.Repeat("a", MaxLineSize+1000)
-	
+
 	msg := &protocol.LogMessage{
 		BaseMessage: protocol.BaseMessage{
 			Type:  protocol.MessageTypeLog,
@@ -95,7 +95,7 @@ func TestLogEntry_Size(t *testing.T) {
 
 	size := entry.Size()
 	expectedSize := len("test") + len("hello world") + len("stdout") + 8 + 4
-	
+
 	if size != expectedSize {
 		t.Errorf("Expected size %d, got %d", expectedSize, size)
 	}
@@ -129,7 +129,7 @@ func TestLogEntry_Matches(t *testing.T) {
 	if !entry.Matches("", errorPattern) {
 		t.Error("Should match ERROR pattern")
 	}
-	
+
 	infoPattern := regexp.MustCompile("INFO")
 	if entry.Matches("", infoPattern) {
 		t.Error("Should not match INFO pattern")
@@ -220,7 +220,7 @@ func TestRingBuffer_SizeBasedEviction(t *testing.T) {
 
 	// Create entries that will exceed MaxBufferSize
 	largeContent := strings.Repeat("a", 1024*1024) // 1MB content
-	
+
 	for i := 0; i < 6; i++ { // 6MB total, should trigger eviction
 		entry := &LogEntry{
 			Label:     "test",
@@ -243,7 +243,7 @@ func TestRingBuffer_TimeBasedEviction(t *testing.T) {
 	defer rb.Close()
 
 	now := time.Now()
-	
+
 	// Add old entry (older than MaxBufferAge)
 	oldEntry := &LogEntry{
 		Label:     "test",
@@ -290,7 +290,7 @@ func TestRingBuffer_BackgroundCleanup(t *testing.T) {
 	defer rb.Close()
 
 	now := time.Now()
-	
+
 	// Add an old entry
 	oldEntry := &LogEntry{
 		Label:     "test",
@@ -327,7 +327,7 @@ func TestRingBuffer_Get(t *testing.T) {
 	defer rb.Close()
 
 	now := time.Now()
-	
+
 	// Add test entries
 	entries := []*LogEntry{
 		{Label: "app1", Content: "INFO: starting up", Stream: protocol.StreamStdout, PID: 1, Timestamp: now.Add(-5 * time.Minute)},
@@ -397,7 +397,7 @@ func TestRingBuffer_GetByTimeRange(t *testing.T) {
 	defer rb.Close()
 
 	now := time.Now()
-	
+
 	entries := []*LogEntry{
 		{Label: "test", Content: "message 1", Stream: protocol.StreamStdout, PID: 1, Timestamp: now.Add(-10 * time.Minute)},
 		{Label: "test", Content: "message 2", Stream: protocol.StreamStdout, PID: 1, Timestamp: now.Add(-5 * time.Minute)},
@@ -411,7 +411,7 @@ func TestRingBuffer_GetByTimeRange(t *testing.T) {
 
 	start := now.Add(-6 * time.Minute)
 	end := now.Add(-1 * time.Minute)
-	
+
 	result := rb.GetByTimeRange(start, end)
 	if len(result) != 2 {
 		t.Errorf("Expected 2 entries in time range, got %d", len(result))
@@ -604,7 +604,7 @@ func TestStats_String(t *testing.T) {
 		OldestTimestamp: &now,
 		NewestTimestamp: &now,
 	}
-	
+
 	str = stats.String()
 	if !strings.Contains(str, "10/100 entries") {
 		t.Errorf("String should contain entry count, got '%s'", str)
@@ -726,7 +726,7 @@ func BenchmarkRingBuffer_Search(b *testing.B) {
 		} else {
 			content = fmt.Sprintf("INFO: Normal operation %d", i)
 		}
-		
+
 		entry := &LogEntry{
 			Label:     "benchmark",
 			Content:   content,

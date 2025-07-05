@@ -17,7 +17,6 @@
 //	metrics.TrackOperation(ctx, func() error {
 //		return startProcess()
 //	})
-//
 package metrics
 
 import (
@@ -34,12 +33,12 @@ type OperationKey struct{}
 type Monitor struct {
 	logger *slog.Logger
 	mu     sync.RWMutex
-	
+
 	// Counters
-	operations    map[string]*OperationMetrics
-	errors        map[string]*ErrorMetrics
-	connections   *ConnectionMetrics
-	
+	operations  map[string]*OperationMetrics
+	errors      map[string]*ErrorMetrics
+	connections *ConnectionMetrics
+
 	// Configuration
 	enableTiming   bool
 	enableErrors   bool
@@ -48,15 +47,15 @@ type Monitor struct {
 
 // OperationMetrics tracks metrics for specific operations
 type OperationMetrics struct {
-	Name           string        `json:"name"`
-	Count          int64         `json:"count"`
-	TotalDuration  time.Duration `json:"total_duration"`
+	Name            string        `json:"name"`
+	Count           int64         `json:"count"`
+	TotalDuration   time.Duration `json:"total_duration"`
 	AverageDuration time.Duration `json:"average_duration"`
-	MinDuration    time.Duration `json:"min_duration"`
-	MaxDuration    time.Duration `json:"max_duration"`
-	LastExecution  time.Time     `json:"last_execution"`
-	Errors         int64         `json:"errors"`
-	Successes      int64         `json:"successes"`
+	MinDuration     time.Duration `json:"min_duration"`
+	MaxDuration     time.Duration `json:"max_duration"`
+	LastExecution   time.Time     `json:"last_execution"`
+	Errors          int64         `json:"errors"`
+	Successes       int64         `json:"successes"`
 }
 
 // ErrorMetrics tracks error occurrences and patterns
@@ -114,13 +113,13 @@ func (m *Monitor) TrackOperation(ctx context.Context, operation string, fn func(
 	if !m.enableTiming {
 		return fn()
 	}
-	
+
 	start := time.Now()
 	err := fn()
 	duration := time.Since(start)
-	
+
 	m.recordOperation(operation, duration, err == nil)
-	
+
 	if m.logger != nil {
 		level := slog.LevelInfo
 		status := "success"
@@ -128,13 +127,13 @@ func (m *Monitor) TrackOperation(ctx context.Context, operation string, fn func(
 			level = slog.LevelError
 			status = "error"
 		}
-		
+
 		m.logger.LogAttrs(ctx, level, "Operation completed",
 			slog.String("operation", operation),
 			slog.Duration("duration", duration),
 			slog.String("status", status),
 		)
-		
+
 		if err != nil {
 			m.logger.LogAttrs(ctx, slog.LevelError, "Operation failed",
 				slog.String("operation", operation),
@@ -142,7 +141,7 @@ func (m *Monitor) TrackOperation(ctx context.Context, operation string, fn func(
 			)
 		}
 	}
-	
+
 	return err
 }
 
@@ -150,7 +149,7 @@ func (m *Monitor) TrackOperation(ctx context.Context, operation string, fn func(
 func (m *Monitor) recordOperation(name string, duration time.Duration, success bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	metrics, exists := m.operations[name]
 	if !exists {
 		metrics = &OperationMetrics{
@@ -160,20 +159,20 @@ func (m *Monitor) recordOperation(name string, duration time.Duration, success b
 		}
 		m.operations[name] = metrics
 	}
-	
+
 	metrics.Count++
 	metrics.TotalDuration += duration
 	metrics.LastExecution = time.Now()
-	
+
 	if duration < metrics.MinDuration {
 		metrics.MinDuration = duration
 	}
 	if duration > metrics.MaxDuration {
 		metrics.MaxDuration = duration
 	}
-	
+
 	metrics.AverageDuration = time.Duration(int64(metrics.TotalDuration) / metrics.Count)
-	
+
 	if success {
 		metrics.Successes++
 	} else {
@@ -186,10 +185,10 @@ func (m *Monitor) LogTiming(operation string, start time.Time, attrs ...slog.Att
 	if !m.enableTiming {
 		return
 	}
-	
+
 	duration := time.Since(start)
 	m.recordOperation(operation, duration, true)
-	
+
 	if m.logger != nil {
 		allAttrs := []slog.Attr{
 			slog.String("operation", operation),
@@ -197,8 +196,8 @@ func (m *Monitor) LogTiming(operation string, start time.Time, attrs ...slog.Att
 			slog.String("metric_type", "timing"),
 		}
 		allAttrs = append(allAttrs, attrs...)
-		
-		m.logger.LogAttrs(context.Background(), slog.LevelInfo, 
+
+		m.logger.LogAttrs(context.Background(), slog.LevelInfo,
 			"Operation timing", allAttrs...)
 	}
 }
@@ -208,9 +207,9 @@ func (m *Monitor) TrackError(ctx context.Context, errorType, code, component, me
 	if !m.enableErrors {
 		return
 	}
-	
+
 	key := errorType + ":" + code
-	
+
 	m.mu.Lock()
 	errorMetrics, exists := m.errors[key]
 	if !exists {
@@ -222,11 +221,11 @@ func (m *Monitor) TrackError(ctx context.Context, errorType, code, component, me
 		}
 		m.errors[key] = errorMetrics
 	}
-	
+
 	errorMetrics.Count++
 	errorMetrics.LastOccurred = time.Now()
 	m.mu.Unlock()
-	
+
 	if m.logger != nil {
 		m.logger.ErrorContext(ctx, "Error tracked",
 			slog.String("error_type", errorType),
@@ -242,35 +241,35 @@ func (m *Monitor) TrackError(ctx context.Context, errorType, code, component, me
 func (m *Monitor) TrackConnection(event string, duration time.Duration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	switch event {
 	case "connect":
 		m.connections.TotalConnections++
 		m.connections.ActiveConnections++
 		m.connections.LastConnectTime = time.Now()
-		
+
 		// Update average connect time
 		if m.connections.TotalConnections > 0 {
-			totalTime := time.Duration(m.connections.AverageConnectTime.Nanoseconds() * 
+			totalTime := time.Duration(m.connections.AverageConnectTime.Nanoseconds() *
 				(m.connections.TotalConnections - 1))
-			m.connections.AverageConnectTime = (totalTime + duration) / 
+			m.connections.AverageConnectTime = (totalTime + duration) /
 				time.Duration(m.connections.TotalConnections)
 		} else {
 			m.connections.AverageConnectTime = duration
 		}
-		
+
 	case "disconnect":
 		if m.connections.ActiveConnections > 0 {
 			m.connections.ActiveConnections--
 		}
-		
+
 	case "connect_failed":
 		m.connections.FailedConnections++
-		
+
 	case "reconnect_attempt":
 		m.connections.ReconnectionAttempts++
 	}
-	
+
 	if m.logger != nil {
 		m.logger.Info("Connection event",
 			slog.String("event", event),
@@ -285,7 +284,7 @@ func (m *Monitor) TrackConnection(event string, duration time.Duration) {
 func (m *Monitor) GetOperationMetrics(operation string) *OperationMetrics {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	if metrics, exists := m.operations[operation]; exists {
 		// Return a copy to avoid race conditions
 		copy := *metrics
@@ -298,7 +297,7 @@ func (m *Monitor) GetOperationMetrics(operation string) *OperationMetrics {
 func (m *Monitor) GetAllOperationMetrics() map[string]*OperationMetrics {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	result := make(map[string]*OperationMetrics)
 	for name, metrics := range m.operations {
 		copy := *metrics
@@ -311,7 +310,7 @@ func (m *Monitor) GetAllOperationMetrics() map[string]*OperationMetrics {
 func (m *Monitor) GetErrorMetrics() map[string]*ErrorMetrics {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	result := make(map[string]*ErrorMetrics)
 	for key, metrics := range m.errors {
 		copy := *metrics
@@ -324,7 +323,7 @@ func (m *Monitor) GetErrorMetrics() map[string]*ErrorMetrics {
 func (m *Monitor) GetConnectionMetrics() *ConnectionMetrics {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	copy := *m.connections
 	return &copy
 }
@@ -334,21 +333,21 @@ func (m *Monitor) LogMetricsSummary(ctx context.Context) {
 	if m.logger == nil {
 		return
 	}
-	
+
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	// Log operation metrics summary
 	m.logger.InfoContext(ctx, "Metrics Summary - Operations",
 		slog.Int("total_operations", len(m.operations)),
 	)
-	
+
 	for name, metrics := range m.operations {
 		successRate := float64(0)
 		if metrics.Count > 0 {
 			successRate = float64(metrics.Successes) / float64(metrics.Count) * 100
 		}
-		
+
 		m.logger.InfoContext(ctx, "Operation metrics",
 			slog.String("operation", name),
 			slog.Int64("count", metrics.Count),
@@ -358,12 +357,12 @@ func (m *Monitor) LogMetricsSummary(ctx context.Context) {
 			slog.Float64("success_rate", successRate),
 		)
 	}
-	
+
 	// Log error metrics summary
 	m.logger.InfoContext(ctx, "Metrics Summary - Errors",
 		slog.Int("total_error_types", len(m.errors)),
 	)
-	
+
 	for _, metrics := range m.errors {
 		m.logger.InfoContext(ctx, "Error metrics",
 			slog.String("error_type", metrics.Type),
@@ -373,7 +372,7 @@ func (m *Monitor) LogMetricsSummary(ctx context.Context) {
 			slog.Time("last_occurred", metrics.LastOccurred),
 		)
 	}
-	
+
 	// Log connection metrics
 	m.logger.InfoContext(ctx, "Connection metrics",
 		slog.Int64("active_connections", m.connections.ActiveConnections),
@@ -388,7 +387,7 @@ func (m *Monitor) LogMetricsSummary(ctx context.Context) {
 func (m *Monitor) Reset() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	m.operations = make(map[string]*OperationMetrics)
 	m.errors = make(map[string]*ErrorMetrics)
 	m.connections = &ConnectionMetrics{}
@@ -463,7 +462,7 @@ func (t *Timer) Stop(attrs ...slog.Attr) {
 func (t *Timer) StopWithError(ctx context.Context, err error) {
 	duration := time.Since(t.start)
 	t.monitor.recordOperation(t.operation, duration, err == nil)
-	
+
 	if err != nil && t.monitor.logger != nil {
 		t.monitor.logger.ErrorContext(ctx, "Timed operation failed",
 			slog.String("operation", t.operation),

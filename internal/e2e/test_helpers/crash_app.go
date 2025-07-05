@@ -13,7 +13,7 @@ import (
 func main() {
 	// Print startup diagnostics
 	fmt.Printf("STARTED: crash_app with args: %v\n", os.Args[1:])
-	
+
 	// App that crashes after a delay
 	delay := 2 * time.Second
 	if len(os.Args) > 1 {

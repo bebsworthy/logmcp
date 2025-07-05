@@ -16,7 +16,7 @@ func ExampleRingBuffer() {
 
 	// Add some log entries
 	now := time.Now()
-	
+
 	// Add entries directly
 	entry1 := &buffer.LogEntry{
 		Label:     "web-server",
@@ -100,8 +100,8 @@ func ExampleRingBuffer_filtering() {
 
 	// Get logs in a specific time range
 	timeRangeLogs := rb.GetByTimeRange(
-		now.Add(-4*time.Minute - 30*time.Second),
-		now.Add(-2*time.Minute + 30*time.Second),
+		now.Add(-4*time.Minute-30*time.Second),
+		now.Add(-2*time.Minute+30*time.Second),
 	)
 	fmt.Printf("Time range logs: %d entries\n", len(timeRangeLogs))
 

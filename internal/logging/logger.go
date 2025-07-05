@@ -16,7 +16,6 @@
 //	// With context for correlation
 //	ctx = logging.WithCorrelationID(ctx, "req-123")
 //	logger.InfoContext(ctx, "Processing request", "sessionID", sessionID)
-//
 package logging
 
 import (
@@ -69,7 +68,7 @@ func NewLogger(cfg config.LoggingConfig) (*Logger, error) {
 	// Create handler based on format
 	var handler slog.Handler
 	opts := &slog.HandlerOptions{
-		Level: level,
+		Level:     level,
 		AddSource: cfg.Verbose,
 		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
 			// Add correlation ID to all log entries if present in context
@@ -187,13 +186,13 @@ func NewServerLogger(cfg config.LoggingConfig) (*Logger, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Add server-specific attributes
-	logger.Logger = logger.Logger.With(
+	logger.Logger = logger.With(
 		slog.String("component", "server"),
 		slog.String("service", "logmcp"),
 	)
-	
+
 	return logger, nil
 }
 
@@ -203,14 +202,14 @@ func NewRunnerLogger(cfg config.LoggingConfig, label string) (*Logger, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Add runner-specific attributes
-	logger.Logger = logger.Logger.With(
+	logger.Logger = logger.With(
 		slog.String("component", "runner"),
 		slog.String("service", "logmcp"),
 		slog.String("label", label),
 	)
-	
+
 	return logger, nil
 }
 
@@ -220,15 +219,15 @@ func NewForwarderLogger(cfg config.LoggingConfig, label, source string) (*Logger
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Add forwarder-specific attributes
-	logger.Logger = logger.Logger.With(
+	logger.Logger = logger.With(
 		slog.String("component", "forwarder"),
 		slog.String("service", "logmcp"),
 		slog.String("label", label),
 		slog.String("source", source),
 	)
-	
+
 	return logger, nil
 }
 
@@ -237,14 +236,14 @@ func NewForwarderLogger(cfg config.LoggingConfig, label, source string) (*Logger
 // LogTiming logs the duration of an operation
 func (l *Logger) LogTiming(ctx context.Context, operation string, start time.Time, attrs ...slog.Attr) {
 	duration := time.Since(start)
-	
+
 	allAttrs := []slog.Attr{
 		slog.String("operation", operation),
 		slog.Duration("duration", duration),
 		slog.String("performance", "timing"),
 	}
 	allAttrs = append(allAttrs, attrs...)
-	
+
 	l.LogAttrs(ctx, slog.LevelInfo, "Operation completed", allAttrs...)
 }
 
@@ -255,7 +254,7 @@ func (l *Logger) LogError(ctx context.Context, msg string, err error, attrs ...s
 		slog.String("error_type", fmt.Sprintf("%T", err)),
 	}
 	allAttrs = append(allAttrs, attrs...)
-	
+
 	l.LogAttrs(ctx, slog.LevelError, msg, allAttrs...)
 }
 
@@ -269,7 +268,7 @@ func (l *Logger) LogRequest(ctx context.Context, method, path string, statusCode
 		slog.String("type", "request"),
 	}
 	allAttrs = append(allAttrs, attrs...)
-	
+
 	level := slog.LevelInfo
 	if statusCode >= 400 {
 		level = slog.LevelWarn
@@ -277,7 +276,7 @@ func (l *Logger) LogRequest(ctx context.Context, method, path string, statusCode
 	if statusCode >= 500 {
 		level = slog.LevelError
 	}
-	
+
 	l.LogAttrs(ctx, level, "Request processed", allAttrs...)
 }
 

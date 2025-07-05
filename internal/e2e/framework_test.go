@@ -71,7 +71,7 @@ func TestFrameworkBasics(t *testing.T) {
 			foundOutput = true
 		}
 	}
-	
+
 	if len(logs) == 0 {
 		t.Error("Expected to get at least one log entry")
 	} else if !foundOutput {

@@ -209,7 +209,7 @@ func (ts *TestServer) Cleanup() {
 			ts.MCPClient.Close()
 			close(done)
 		}()
-		
+
 		select {
 		case <-done:
 			// Closed successfully
@@ -245,7 +245,7 @@ func (ts *TestServer) Cleanup() {
 func (ts *TestServer) StartTestProcess(label, command string, args ...string) error {
 	callRequest := mcp.CallToolRequest{}
 	callRequest.Params.Name = "start_process"
-	
+
 	arguments := map[string]any{
 		"label":     label,
 		"command":   command,
@@ -265,7 +265,7 @@ func (ts *TestServer) StartTestProcess(label, command string, args ...string) er
 func (ts *TestServer) StartTestProcessWithOptions(label, command string, args []string, opts map[string]any) error {
 	callRequest := mcp.CallToolRequest{}
 	callRequest.Params.Name = "start_process"
-	
+
 	arguments := map[string]any{
 		"label":     label,
 		"command":   command,
@@ -278,7 +278,6 @@ func (ts *TestServer) StartTestProcessWithOptions(label, command string, args []
 	}
 
 	callRequest.Params.Arguments = arguments
-	
 
 	ctx, cancel := context.WithTimeout(ts.ctx, 10*time.Second)
 	defer cancel()
@@ -314,7 +313,7 @@ func (ts *TestServer) GetLogs(labels []string, opts ...LogOption) ([]LogEntry, e
 	var logs []LogEntry
 	if len(result.Content) > 0 {
 		content := result.Content[0]
-		
+
 		var textContent string
 		switch c := content.(type) {
 		case mcp.TextContent:
@@ -333,7 +332,7 @@ func (ts *TestServer) GetLogs(labels []string, opts ...LogOption) ([]LogEntry, e
 
 		// Debug: log raw content
 		ts.t.Logf("GetLogs raw textContent: %s", textContent)
-		
+
 		// Parse the JSON response - the server returns a wrapped response
 		var response struct {
 			Success bool `json:"success"`
@@ -388,13 +387,12 @@ func (ts *TestServer) ListSessions() ([]Session, error) {
 		return nil, err
 	}
 
-
 	// Parse result - MCP returns text content with JSON
 	var sessions []Session
 	if len(result.Content) > 0 {
 		// The Content is mcp.TextContent based on our testing
 		content := result.Content[0]
-		
+
 		var textContent string
 		switch c := content.(type) {
 		case mcp.TextContent:

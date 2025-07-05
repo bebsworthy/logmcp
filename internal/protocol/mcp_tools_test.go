@@ -8,18 +8,18 @@ import (
 
 func TestGetMCPTools(t *testing.T) {
 	tools := GetMCPTools()
-	
+
 	expectedTools := []string{"list_sessions", "get_logs", "start_process", "control_process", "send_stdin"}
-	
+
 	if len(tools) != len(expectedTools) {
 		t.Fatalf("Expected %d tools, got %d", len(expectedTools), len(tools))
 	}
-	
+
 	toolNames := make(map[string]bool)
 	for _, tool := range tools {
 		toolNames[tool.Name] = true
 	}
-	
+
 	for _, expected := range expectedTools {
 		if !toolNames[expected] {
 			t.Errorf("Missing expected tool: %s", expected)
@@ -35,17 +35,17 @@ func TestParseMCPRequest(t *testing.T) {
 		"stream": "stdout",
 		"pattern": "error.*"
 	}`
-	
+
 	req, err := ParseMCPRequest("get_logs", []byte(getLogsJSON))
 	if err != nil {
 		t.Fatalf("Failed to parse get_logs request: %v", err)
 	}
-	
+
 	getLogsReq, ok := req.(*GetLogsRequest)
 	if !ok {
 		t.Fatalf("Expected GetLogsRequest, got %T", req)
 	}
-	
+
 	if len(getLogsReq.Labels) != 1 || getLogsReq.Labels[0] != "test-session" {
 		t.Errorf("Expected labels ['test-session'], got %v", getLogsReq.Labels)
 	}
@@ -65,7 +65,7 @@ func TestValidateMCPRequest(t *testing.T) {
 	if err := ValidateMCPRequest("get_logs", validReq); err != nil {
 		t.Errorf("Valid request failed validation: %v", err)
 	}
-	
+
 	// Test invalid GetLogsRequest (empty labels)
 	invalidReq := &GetLogsRequest{
 		Labels: []string{},
@@ -73,7 +73,7 @@ func TestValidateMCPRequest(t *testing.T) {
 	if err := ValidateMCPRequest("get_logs", invalidReq); err == nil {
 		t.Error("Invalid request passed validation")
 	}
-	
+
 	// Test ControlProcessRequest with signal action
 	controlReq := &ControlProcessRequest{
 		Label:  "test-session",
@@ -83,7 +83,7 @@ func TestValidateMCPRequest(t *testing.T) {
 	if err := ValidateMCPRequest("control_process", controlReq); err != nil {
 		t.Errorf("Valid control request failed validation: %v", err)
 	}
-	
+
 	// Test ControlProcessRequest with signal action but no signal
 	invalidControlReq := &ControlProcessRequest{
 		Label:  "test-session",
@@ -114,21 +114,21 @@ func TestNewListSessionsResponse(t *testing.T) {
 			RunnerMode: ModeForward,
 		},
 	}
-	
+
 	response := NewListSessionsResponse(sessions)
-	
+
 	if !response.Success {
 		t.Error("Expected success to be true")
 	}
-	
+
 	if len(response.Data.Sessions) != 2 {
 		t.Errorf("Expected 2 sessions, got %d", len(response.Data.Sessions))
 	}
-	
+
 	if response.Meta.TotalCount != 2 {
 		t.Errorf("Expected total count 2, got %d", response.Meta.TotalCount)
 	}
-	
+
 	if response.Meta.ActiveCount != 1 {
 		t.Errorf("Expected active count 1, got %d", response.Meta.ActiveCount)
 	}
@@ -136,17 +136,17 @@ func TestNewListSessionsResponse(t *testing.T) {
 
 func TestSerializeMCPResponse(t *testing.T) {
 	response := NewMCPErrorResponse("Test error", "TEST_ERROR")
-	
+
 	data, err := SerializeMCPResponse(response)
 	if err != nil {
 		t.Fatalf("Failed to serialize response: %v", err)
 	}
-	
+
 	var parsed map[string]interface{}
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		t.Fatalf("Failed to parse serialized response: %v", err)
 	}
-	
+
 	if parsed["success"] != false {
 		t.Errorf("Expected success false, got %v", parsed["success"])
 	}

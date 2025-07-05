@@ -521,11 +521,12 @@ func TestMCPProtocolContextCancellation(t *testing.T) {
 		// Wait for the request to complete
 		select {
 		case err := <-done:
-			if err == nil {
+			switch err {
+			case nil:
 				t.Log("Request completed before cancellation")
-			} else if err == context.Canceled {
+			case context.Canceled:
 				t.Log("Request was properly cancelled")
-			} else {
+			default:
 				t.Logf("Request failed with error: %v", err)
 			}
 		case <-time.After(2 * time.Second):
@@ -551,11 +552,12 @@ func TestMCPProtocolContextCancellation(t *testing.T) {
 		callRequest.Params.Arguments = map[string]any{}
 
 		_, err := server.MCPClient.CallTool(ctx, callRequest)
-		if err == nil {
+		switch err {
+		case nil:
 			t.Log("Request completed before timeout")
-		} else if err == context.DeadlineExceeded {
+		case context.DeadlineExceeded:
 			t.Log("Request timed out as expected")
-		} else {
+		default:
 			t.Logf("Request failed with error: %v", err)
 		}
 

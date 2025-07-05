@@ -10,13 +10,13 @@ import (
 type MessageType string
 
 const (
-	MessageTypeLog        MessageType = "log"
-	MessageTypeCommand    MessageType = "command"
-	MessageTypeStdin      MessageType = "stdin"
-	MessageTypeAck        MessageType = "ack"
-	MessageTypeError      MessageType = "error"
-	MessageTypeStatus     MessageType = "status"
-	MessageTypeRegister   MessageType = "register"
+	MessageTypeLog      MessageType = "log"
+	MessageTypeCommand  MessageType = "command"
+	MessageTypeStdin    MessageType = "stdin"
+	MessageTypeAck      MessageType = "ack"
+	MessageTypeError    MessageType = "error"
+	MessageTypeStatus   MessageType = "status"
+	MessageTypeRegister MessageType = "register"
 )
 
 // StreamType represents stdout or stderr
@@ -66,10 +66,10 @@ type BaseMessage struct {
 // LogMessage represents a log entry from runner to server
 type LogMessage struct {
 	BaseMessage
-	Content   string    `json:"content" validate:"required"`
-	Timestamp time.Time `json:"timestamp" validate:"required"`
+	Content   string     `json:"content" validate:"required"`
+	Timestamp time.Time  `json:"timestamp" validate:"required"`
 	Stream    StreamType `json:"stream" validate:"required,oneof=stdout stderr"`
-	PID       int       `json:"pid"`
+	PID       int        `json:"pid"`
 }
 
 // CommandMessage represents a command from server to runner
@@ -269,8 +269,8 @@ func ValidateMessage(msg interface{}) error {
 		if m.Label == "" {
 			return fmt.Errorf("label is required")
 		}
-		if m.Status != StatusRunning && m.Status != StatusStopped && 
-		   m.Status != StatusCrashed && m.Status != StatusRestarting {
+		if m.Status != StatusRunning && m.Status != StatusStopped &&
+			m.Status != StatusCrashed && m.Status != StatusRestarting {
 			return fmt.Errorf("invalid status value")
 		}
 
@@ -291,15 +291,15 @@ func ValidateMessage(msg interface{}) error {
 
 // Common error codes
 const (
-	ErrorCodeProcessNotFound     = "PROCESS_NOT_FOUND"
-	ErrorCodeInvalidCommand      = "INVALID_COMMAND"
-	ErrorCodePermissionDenied    = "PERMISSION_DENIED"
-	ErrorCodeConnectionLost      = "CONNECTION_LOST"
-	ErrorCodeInvalidMessage      = "INVALID_MESSAGE"
-	ErrorCodeSessionNotFound     = "SESSION_NOT_FOUND"
-	ErrorCodeProcessFailed       = "PROCESS_FAILED"
-	ErrorCodeTimeout             = "TIMEOUT"
-	ErrorCodeInternalError       = "INTERNAL_ERROR"
+	ErrorCodeProcessNotFound        = "PROCESS_NOT_FOUND"
+	ErrorCodeInvalidCommand         = "INVALID_COMMAND"
+	ErrorCodePermissionDenied       = "PERMISSION_DENIED"
+	ErrorCodeConnectionLost         = "CONNECTION_LOST"
+	ErrorCodeInvalidMessage         = "INVALID_MESSAGE"
+	ErrorCodeSessionNotFound        = "SESSION_NOT_FOUND"
+	ErrorCodeProcessFailed          = "PROCESS_FAILED"
+	ErrorCodeTimeout                = "TIMEOUT"
+	ErrorCodeInternalError          = "INTERNAL_ERROR"
 	ErrorCodeCapabilityNotSupported = "CAPABILITY_NOT_SUPPORTED"
 )
 

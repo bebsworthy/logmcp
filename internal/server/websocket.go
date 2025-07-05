@@ -22,7 +22,7 @@
 //
 //	sm := server.NewSessionManager()
 //	wsServer := server.NewWebSocketServer(sm)
-//	
+//
 //	// Create HTTP server with WebSocket endpoint
 //	http.HandleFunc("/", wsServer.HandleWebSocket)
 //	log.Fatal(http.ListenAndServe(":8765", nil))
@@ -36,8 +36,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"github.com/bebsworthy/logmcp/internal/protocol"
+	"github.com/gorilla/websocket"
 )
 
 // WebSocketServer manages WebSocket connections and message routing
@@ -51,7 +51,7 @@ type WebSocketServer struct {
 	ctx            context.Context
 	cancel         context.CancelFunc
 	wg             sync.WaitGroup
-	
+
 	// Configuration
 	readTimeout  time.Duration
 	writeTimeout time.Duration
@@ -64,7 +64,6 @@ type ConnectionInfo struct {
 	LastPing     time.Time
 	LastActivity time.Time
 	mutex        sync.RWMutex
-	writeMutex   sync.Mutex  // Protects WebSocket writes
 }
 
 // WebSocketServerConfig contains configuration options for the WebSocket server
@@ -93,13 +92,13 @@ func NewWebSocketServer(sessionManager *SessionManager) *WebSocketServer {
 // NewWebSocketServerWithConfig creates a new WebSocket server with custom configuration
 func NewWebSocketServerWithConfig(sessionManager *SessionManager, config WebSocketServerConfig) *WebSocketServer {
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
 		CheckOrigin:     config.CheckOrigin,
 	}
-	
+
 	if upgrader.CheckOrigin == nil {
 		upgrader.CheckOrigin = func(r *http.Request) bool { return true }
 	}
@@ -119,7 +118,7 @@ func NewWebSocketServerWithConfig(sessionManager *SessionManager, config WebSock
 
 // HandleWebSocket handles HTTP requests and upgrades them to WebSocket connections
 func (ws *WebSocketServer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
-	
+
 	// Upgrade HTTP connection to WebSocket
 	conn, err := ws.upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -145,7 +144,7 @@ func (ws *WebSocketServer) handleConnection(conn *websocket.Conn) {
 	ws.connMutex.Lock()
 	ws.connections[conn] = connInfo
 	ws.connMutex.Unlock()
-	
+
 	// Register write mutex
 	ws.writeMutexLock.Lock()
 	ws.writeMutexes[conn] = &sync.Mutex{}
@@ -164,7 +163,7 @@ func (ws *WebSocketServer) handleConnection(conn *websocket.Conn) {
 		defer cancel() // Cancel context when ping handler exits
 		ws.handlePing(ctx, conn, connInfo)
 	}()
-	
+
 	// Start message reader
 	go func() {
 		defer wg.Done()
@@ -181,10 +180,10 @@ func (ws *WebSocketServer) handleConnection(conn *websocket.Conn) {
 
 // handleMessages processes incoming messages from a WebSocket connection
 func (ws *WebSocketServer) handleMessages(ctx context.Context, conn *websocket.Conn, connInfo *ConnectionInfo) {
-	
+
 	// Set read deadline
 	conn.SetReadDeadline(time.Now().Add(ws.readTimeout))
-	
+
 	// Set pong handler
 	conn.SetPongHandler(func(string) error {
 		connInfo.mutex.Lock()
@@ -216,7 +215,7 @@ func (ws *WebSocketServer) handleMessages(ctx context.Context, conn *websocket.C
 			// Process message
 			if err := ws.processMessage(conn, connInfo, message); err != nil {
 				log.Printf("Error processing message: %v", err)
-				
+
 				// Send error response if we can identify the session
 				if connInfo.Label != "" {
 					errorMsg := protocol.NewErrorMessage(
@@ -236,7 +235,7 @@ func (ws *WebSocketServer) handleMessages(ctx context.Context, conn *websocket.C
 
 // processMessage processes a single incoming message
 func (ws *WebSocketServer) processMessage(conn *websocket.Conn, connInfo *ConnectionInfo, message []byte) error {
-	
+
 	// Parse message
 	msg, err := protocol.ParseMessage(message)
 	if err != nil {
@@ -270,7 +269,7 @@ func (ws *WebSocketServer) handleRegistration(conn *websocket.Conn, connInfo *Co
 	// Determine runner mode and create args based on command
 	var mode RunnerMode
 	var args interface{}
-	
+
 	if msg.Command != "" {
 		// This is a process runner
 		mode = ModeRun
@@ -364,7 +363,7 @@ func (ws *WebSocketServer) handleStatusMessage(connInfo *ConnectionInfo, msg *pr
 func (ws *WebSocketServer) handleAckMessage(connInfo *ConnectionInfo, msg *protocol.AckMessage) error {
 	// For now, just log the acknowledgment
 	// In a more complete implementation, this would match against pending commands
-	log.Printf("Received acknowledgment from session %s: success=%v, message=%s", 
+	log.Printf("Received acknowledgment from session %s: success=%v, message=%s",
 		connInfo.Label, msg.Success, msg.Message)
 	return nil
 }
@@ -372,14 +371,14 @@ func (ws *WebSocketServer) handleAckMessage(connInfo *ConnectionInfo, msg *proto
 // handleErrorMessage processes error messages from runners
 func (ws *WebSocketServer) handleErrorMessage(connInfo *ConnectionInfo, msg *protocol.ErrorMessage) error {
 	// Log the error
-	log.Printf("Received error from session %s: code=%s, message=%s", 
+	log.Printf("Received error from session %s: code=%s, message=%s",
 		connInfo.Label, msg.ErrorCode, msg.Message)
 	return nil
 }
 
 // handlePing manages ping/pong heartbeat for a connection
 func (ws *WebSocketServer) handlePing(ctx context.Context, conn *websocket.Conn, connInfo *ConnectionInfo) {
-	
+
 	ticker := time.NewTicker(ws.pingInterval)
 	defer ticker.Stop()
 
@@ -392,21 +391,21 @@ func (ws *WebSocketServer) handlePing(ctx context.Context, conn *websocket.Conn,
 			ws.writeMutexLock.RLock()
 			writeMutex, exists := ws.writeMutexes[conn]
 			ws.writeMutexLock.RUnlock()
-			
+
 			if !exists {
 				return // Connection already closed
 			}
-			
+
 			// Lock for writing
 			writeMutex.Lock()
-			
+
 			// Set write deadline
 			conn.SetWriteDeadline(time.Now().Add(ws.writeTimeout))
-			
+
 			// Send ping
 			err := conn.WriteMessage(websocket.PingMessage, nil)
 			writeMutex.Unlock()
-			
+
 			if err != nil {
 				log.Printf("Failed to send ping: %v", err)
 				return
@@ -434,7 +433,7 @@ func (ws *WebSocketServer) SendCommand(label string, action protocol.CommandActi
 
 	// Create command message
 	cmdMsg := protocol.NewCommandMessage(session.Label, action, signal)
-	
+
 	// Generate command ID for tracking
 	cmdMsg.CommandID = fmt.Sprintf("cmd-%d", time.Now().UnixNano())
 
@@ -472,15 +471,15 @@ func (ws *WebSocketServer) sendMessage(conn *websocket.Conn, msg interface{}) er
 	ws.writeMutexLock.RLock()
 	writeMutex, exists := ws.writeMutexes[conn]
 	ws.writeMutexLock.RUnlock()
-	
+
 	if !exists {
 		return fmt.Errorf("connection not registered")
 	}
-	
+
 	// Lock for writing
 	writeMutex.Lock()
 	defer writeMutex.Unlock()
-	
+
 	// Serialize message
 	data, err := protocol.SerializeMessage(msg)
 	if err != nil {
@@ -535,7 +534,7 @@ func (ws *WebSocketServer) cleanup(conn *websocket.Conn, connInfo *ConnectionInf
 	ws.connMutex.Lock()
 	delete(ws.connections, conn)
 	ws.connMutex.Unlock()
-	
+
 	// Remove write mutex
 	ws.writeMutexLock.Lock()
 	delete(ws.writeMutexes, conn)
@@ -591,7 +590,7 @@ type ConnectionStats struct {
 
 // String returns a human-readable string representation of the connection stats
 func (s ConnectionStats) String() string {
-	return fmt.Sprintf("Connections: %d total, %d with registered sessions", 
+	return fmt.Sprintf("Connections: %d total, %d with registered sessions",
 		s.TotalConnections, s.RegisteredSessions)
 }
 
@@ -605,7 +604,7 @@ func (ws *WebSocketServer) IsHealthy() bool {
 // GetHealth returns detailed health information about the WebSocket server
 func (ws *WebSocketServer) GetHealth() WebSocketServerHealth {
 	stats := ws.GetConnectionStats()
-	
+
 	return WebSocketServerHealth{
 		IsHealthy:        ws.IsHealthy(),
 		ConnectionStats:  stats,

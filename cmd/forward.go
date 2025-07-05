@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/bebsworthy/logmcp/internal/config"
 	"github.com/bebsworthy/logmcp/internal/runner"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -134,28 +134,28 @@ func runForward(cmd *cobra.Command, args []string) error {
 
 	// Create log forwarder with LogMCP configuration
 	forwarder := runner.NewLogForwarderWithLogMCPConfig(source, forwardLabel, serverURL, cfg)
-	
+
 	// Set up callbacks
 	setupForwarderCallbacks(forwarder)
-	
+
 	// Connect to server with retry logic
 	if verbose {
 		fmt.Printf("Connecting to server...\n")
 	}
-	
+
 	if err := forwarder.GetWebSocketClient().ConnectWithRetry(); err != nil {
 		return fmt.Errorf("failed to connect to server: %w", err)
 	}
-	
+
 	if verbose {
 		fmt.Printf("Connected successfully! Label: %s\n", forwarder.GetWebSocketClient().GetLabel())
 	}
-	
+
 	// Run the forwarder
 	if verbose {
 		fmt.Printf("Starting log forwarding from %s...\n", source)
 	}
-	
+
 	return forwarder.Run()
 }
 
@@ -235,37 +235,6 @@ func isStdinPipe() bool {
 	return false
 }
 
-// createForwarderWebSocketClient creates and configures a WebSocket client for log forwarding
-func createForwarderWebSocketClient(serverURL, label, source string) *runner.WebSocketClient {
-	client := runner.NewWebSocketClient(serverURL, label)
-	client.SetCommand("", getCurrentWorkingDir(), []string{})
-	
-	// Set up client callbacks
-	client.OnConnected = func(label string) {
-		if verbose {
-			log.Printf("Session registered with label: %s", label)
-		}
-	}
-	
-	client.OnDisconnected = func() {
-		if verbose {
-			log.Printf("Disconnected from server")
-		}
-	}
-	
-	client.OnError = func(err error) {
-		log.Printf("WebSocket error: %v", err)
-	}
-	
-	return client
-}
-
-// createLogForwarder creates and configures a log forwarder
-func createLogForwarder(source, label string) *runner.LogForwarder {
-	config := runner.DefaultLogForwarderConfig()
-	return runner.NewLogForwarderWithConfig(source, label, config)
-}
-
 // setupForwarderCallbacks sets up callbacks for the log forwarder
 func setupForwarderCallbacks(forwarder *runner.LogForwarder) {
 	forwarder.OnLogLine = func(content string) {
@@ -273,7 +242,7 @@ func setupForwarderCallbacks(forwarder *runner.LogForwarder) {
 			fmt.Printf("[forward] %s\n", content)
 		}
 	}
-	
+
 	forwarder.OnError = func(err error) {
 		log.Printf("Forwarder error: %v", err)
 	}

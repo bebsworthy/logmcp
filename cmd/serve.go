@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/bebsworthy/logmcp/internal/server"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -55,11 +55,11 @@ func init() {
 func runServe(cmd *cobra.Command, args []string) error {
 	// Get configuration
 	config := GetConfig()
-	
+
 	// Use config values as defaults, override with flags if provided
 	actualHost := config.Server.Host
 	actualPort := config.Server.WebSocketPort
-	
+
 	// Override with command line flags if provided
 	if host != "" {
 		actualHost = host
@@ -67,7 +67,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	if websocketPort != 0 {
 		actualPort = websocketPort
 	}
-	
+
 	if verbose || config.Logging.Verbose {
 		fmt.Fprintf(os.Stderr, "Starting LogMCP server...\n")
 		fmt.Fprintf(os.Stderr, "WebSocket endpoint: ws://%s:%d/\n", actualHost, actualPort)
@@ -125,18 +125,18 @@ func runServe(cmd *cobra.Command, args []string) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		
+
 		// Set up HTTP server with WebSocket handler
 		mux := http.NewServeMux()
 		mux.HandleFunc("/", wsServer.HandleWebSocket)
-		
+
 		httpServer := &http.Server{
 			Addr:         fmt.Sprintf("%s:%d", actualHost, actualPort),
 			Handler:      mux,
 			ReadTimeout:  config.WebSocket.ReadTimeout,
 			WriteTimeout: config.WebSocket.WriteTimeout,
 		}
-		
+
 		// Start HTTP server
 		go func() {
 			if verbose || config.Logging.Verbose {
@@ -146,14 +146,14 @@ func runServe(cmd *cobra.Command, args []string) error {
 				fmt.Fprintf(os.Stderr, "WebSocket server error: %v\n", err)
 			}
 		}()
-		
+
 		// Wait for shutdown signal
 		<-ctx.Done()
-		
+
 		// Graceful shutdown with timeout
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), config.Process.GracefulShutdownTimeout)
 		defer shutdownCancel()
-		
+
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {
 			fmt.Fprintf(os.Stderr, "WebSocket server shutdown error: %v\n", err)
 		}
@@ -163,11 +163,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		
+
 		if verbose || config.Logging.Verbose {
 			fmt.Fprintf(os.Stderr, "MCP server starting on %s\n", config.Server.MCPTransport)
 		}
-		
+
 		// MCP server blocks until stdin is closed
 		if err := mcpServer.Serve(); err != nil {
 			fmt.Fprintf(os.Stderr, "MCP server error: %v\n", err)
@@ -182,17 +182,17 @@ func runServe(cmd *cobra.Command, args []string) error {
 	<-sigChan
 
 	fmt.Fprintf(os.Stderr, "\n🛑 Shutting down LogMCP server...\n")
-	
+
 	// Cancel context to signal shutdown
 	cancel()
-	
+
 	// Wait for all goroutines to finish with timeout
 	done := make(chan struct{})
 	go func() {
 		wg.Wait()
 		close(done)
 	}()
-	
+
 	select {
 	case <-done:
 		fmt.Fprintf(os.Stderr, "Server stopped gracefully.\n")

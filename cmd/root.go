@@ -4,16 +4,16 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
 	"github.com/bebsworthy/logmcp/internal/config"
+	"github.com/spf13/cobra"
 )
 
 var (
 	// Global flags
-	configFile  string
-	serverURL   string
-	verbose     bool
-	
+	configFile string
+	serverURL  string
+	verbose    bool
+
 	// Global configuration
 	appConfig *config.Config
 )
@@ -48,7 +48,7 @@ func init() {
 func initConfig() {
 	// Determine config file path
 	configPath := configFile
-	
+
 	if configPath == "" {
 		// Check for LOGMCP_CONFIG environment variable
 		if envConfig := os.Getenv("LOGMCP_CONFIG"); envConfig != "" {
@@ -56,7 +56,7 @@ func initConfig() {
 		}
 		// Otherwise let config package handle auto-discovery
 	}
-	
+
 	// Load configuration
 	var err error
 	appConfig, err = config.LoadConfig(configPath)
@@ -64,12 +64,12 @@ func initConfig() {
 		fmt.Fprintf(os.Stderr, "Error loading configuration: %v\n", err)
 		os.Exit(1)
 	}
-	
+
 	// Override verbose setting from command line flag if provided
 	if verbose {
 		appConfig.Logging.Verbose = true
 	}
-	
+
 	// Override server URL from command line flag if provided
 	if serverURL != "" && serverURL != getDefaultServerURL() {
 		// Command line flag was explicitly set, keep it as is
@@ -78,14 +78,14 @@ func initConfig() {
 		// Use server URL from config for consistency
 		serverURL = fmt.Sprintf("ws://%s:%d", appConfig.Server.Host, appConfig.Server.WebSocketPort)
 	}
-	
+
 	if verbose || appConfig.Logging.Verbose {
 		if configPath != "" {
 			fmt.Printf("Loaded configuration from: %s\n", configPath)
 		} else {
 			fmt.Printf("Using default configuration\n")
 		}
-		
+
 		if appConfig.Development.DebugMode {
 			fmt.Printf("Debug mode enabled\n")
 		}

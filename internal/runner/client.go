@@ -4,7 +4,7 @@
 // and the LogMCP server. It provides:
 //
 // - Connection management with automatic reconnection
-// - Session registration and lifecycle management  
+// - Session registration and lifecycle management
 // - Message serialization and routing
 // - Command handling from server
 // - Heartbeat and health monitoring
@@ -20,12 +20,11 @@
 //	client.OnCommand = func(action, signal string) {
 //		// Handle control commands
 //	}
-//	
+//
 //	if err := client.Connect(); err != nil {
 //		log.Fatal(err)
 //	}
 //	defer client.Close()
-//
 package runner
 
 import (
@@ -37,11 +36,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
-	"github.com/gorilla/websocket"
 	"github.com/bebsworthy/logmcp/internal/errors"
 	"github.com/bebsworthy/logmcp/internal/metrics"
 	"github.com/bebsworthy/logmcp/internal/protocol"
+	"github.com/cenkalti/backoff/v4"
+	"github.com/gorilla/websocket"
 )
 
 // registrationResponse holds the response from session registration
@@ -54,16 +53,16 @@ type registrationResponse struct {
 // WebSocketClient manages WebSocket connection to LogMCP server
 type WebSocketClient struct {
 	// Connection settings
-	serverURL string
-	label     string
-	command   string
-	workingDir string
+	serverURL    string
+	label        string
+	command      string
+	workingDir   string
 	capabilities []string
 
 	// Connection state
-	conn       *websocket.Conn
-	connected  bool
-	connMutex  sync.RWMutex
+	conn      *websocket.Conn
+	connected bool
+	connMutex sync.RWMutex
 
 	// Registration handling
 	registrationChan       chan registrationResponse
@@ -71,26 +70,26 @@ type WebSocketClient struct {
 	registrationMutex      sync.RWMutex
 
 	// Context and lifecycle
-	ctx        context.Context
-	cancel     context.CancelFunc
-	wg         sync.WaitGroup
+	ctx    context.Context
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
 
 	// Configuration
-	reconnectDelay     time.Duration
-	maxReconnectDelay  time.Duration
-	reconnectAttempts  int
+	reconnectDelay       time.Duration
+	maxReconnectDelay    time.Duration
+	reconnectAttempts    int
 	maxReconnectAttempts int
-	pingInterval       time.Duration
-	writeTimeout       time.Duration
-	readTimeout        time.Duration
+	pingInterval         time.Duration
+	writeTimeout         time.Duration
+	readTimeout          time.Duration
 
 	// Callbacks
-	OnLogMessage    func(content, stream string, pid int)
-	OnCommand       func(action string, signal *protocol.Signal) error
-	OnStdinMessage  func(input string) error
-	OnConnected     func(label string)
-	OnDisconnected  func()
-	OnError         func(error)
+	OnLogMessage   func(content, stream string, pid int)
+	OnCommand      func(action string, signal *protocol.Signal) error
+	OnStdinMessage func(input string) error
+	OnConnected    func(label string)
+	OnDisconnected func()
+	OnError        func(error)
 
 	// Logging and metrics
 	logger  *slog.Logger
@@ -104,12 +103,12 @@ type WebSocketClient struct {
 
 // WebSocketClientConfig contains configuration options for the WebSocket client
 type WebSocketClientConfig struct {
-	ReconnectDelay        time.Duration
-	MaxReconnectDelay     time.Duration
-	MaxReconnectAttempts  int
-	PingInterval          time.Duration
-	WriteTimeout          time.Duration
-	ReadTimeout           time.Duration
+	ReconnectDelay       time.Duration
+	MaxReconnectDelay    time.Duration
+	MaxReconnectAttempts int
+	PingInterval         time.Duration
+	WriteTimeout         time.Duration
+	ReadTimeout          time.Duration
 }
 
 // DefaultWebSocketClientConfig returns default configuration for the WebSocket client
@@ -176,7 +175,7 @@ func (c *WebSocketClient) SetMonitor(monitor *metrics.Monitor) {
 func (c *WebSocketClient) Connect() error {
 	start := time.Now()
 	var connectErr error
-	
+
 	defer func() {
 		if c.monitor != nil {
 			if connectErr != nil {
@@ -206,7 +205,7 @@ func (c *WebSocketClient) Connect() error {
 	// Establish WebSocket connection
 	dialer := websocket.DefaultDialer
 	dialer.HandshakeTimeout = 10 * time.Second
-	
+
 	conn, _, err := dialer.Dial(u.String(), nil)
 	if err != nil {
 		// Increment reconnection attempts under lock
@@ -229,7 +228,7 @@ func (c *WebSocketClient) Connect() error {
 
 	// Register session
 	if err := c.registerSession(); err != nil {
-		c.conn.Close()
+		_ = c.conn.Close()
 		c.connected = false
 		connectErr = errors.WrapError(err, "failed to register session")
 		return connectErr
@@ -261,32 +260,32 @@ func (c *WebSocketClient) ConnectWithRetry() error {
 	bo.MaxElapsedTime = 0 // No time limit, only attempt limit
 	bo.Multiplier = 2.0
 	bo.RandomizationFactor = 0.1 // Add jitter to prevent thundering herd
-	
+
 	// Wrap with context to handle cancellation
 	contextBackoff := backoff.WithContext(bo, c.ctx)
-	
+
 	// Apply max attempts limit if configured
 	var finalBackoff backoff.BackOff = contextBackoff
 	if c.maxReconnectAttempts > 0 {
 		finalBackoff = backoff.WithMaxRetries(contextBackoff, uint64(c.maxReconnectAttempts))
 	}
-	
+
 	// Define the operation to retry
 	operation := func() error {
 		err := c.Connect()
 		if err != nil {
 			c.reconnectAttempts++
-			
+
 			// Check if it's a permanent error (shouldn't retry)
 			if isPermanentError(err) {
 				return backoff.Permanent(err)
 			}
-			
+
 			// Track reconnection attempt
 			if c.monitor != nil {
 				c.monitor.TrackConnection("reconnect_attempt", 0)
 			}
-			
+
 			if c.logger != nil {
 				c.logger.WarnContext(c.ctx, "Connection attempt failed",
 					slog.Int("attempt", c.reconnectAttempts),
@@ -296,15 +295,15 @@ func (c *WebSocketClient) ConnectWithRetry() error {
 			if c.OnError != nil {
 				c.OnError(fmt.Errorf("connection failed (attempt %d): %w", c.reconnectAttempts, err))
 			}
-			
+
 			return err
 		}
-		
+
 		// Success - reset attempts counter
 		c.reconnectAttempts = 0
 		return nil
 	}
-	
+
 	// Retry the operation with exponential backoff
 	return backoff.Retry(operation, finalBackoff)
 }
@@ -322,45 +321,45 @@ func isPermanentError(err error) bool {
 			return true
 		}
 	}
-	
+
 	// Check for specific error codes
 	if errors.IsCode(err, "INVALID_URL") {
 		return true
 	}
-	
+
 	// Check for URL parsing errors (Go standard library)
 	if _, ok := err.(*url.Error); ok {
 		return true
 	}
-	
+
 	// Check error message content for permanent conditions
 	errorMsg := err.Error()
-	
+
 	// URL scheme errors are permanent
 	if strings.Contains(errorMsg, "unsupported protocol scheme") {
 		return true
 	}
-	
-	// Invalid URL format is permanent  
+
+	// Invalid URL format is permanent
 	if strings.Contains(errorMsg, "invalid URL") {
 		return true
 	}
-	
+
 	// Malformed WebSocket URL is permanent
 	if strings.Contains(errorMsg, "malformed ws or wss URL") {
 		return true
 	}
-	
+
 	// Host resolution errors that indicate permanent DNS issues
 	if strings.Contains(errorMsg, "no such host") {
 		return true
 	}
-	
+
 	// WebSocket upgrade failure due to invalid URL
 	if strings.Contains(errorMsg, "bad handshake") {
 		return true
 	}
-	
+
 	// For now, treat most errors as temporary (can be retried)
 	return false
 }
@@ -413,10 +412,10 @@ func (c *WebSocketClient) registerSession() error {
 	}()
 
 	regMsg := protocol.NewSessionRegistrationMessage(
-		c.label,          // Label
-		c.command,        // Command being executed
-		c.workingDir,     // Working directory
-		c.capabilities,   // Capabilities
+		c.label,        // Label
+		c.command,      // Command being executed
+		c.workingDir,   // Working directory
+		c.capabilities, // Capabilities
 	)
 
 	data, err := protocol.SerializeMessage(regMsg)
@@ -424,7 +423,7 @@ func (c *WebSocketClient) registerSession() error {
 		return fmt.Errorf("failed to serialize registration message: %w", err)
 	}
 
-	c.conn.SetWriteDeadline(time.Now().Add(c.writeTimeout))
+	_ = c.conn.SetWriteDeadline(time.Now().Add(c.writeTimeout))
 	if err := c.conn.WriteMessage(websocket.TextMessage, data); err != nil {
 		return fmt.Errorf("failed to send registration message: %w", err)
 	}
@@ -454,7 +453,7 @@ func (c *WebSocketClient) SendLogMessage(content, stream string, pid int) error 
 	}
 
 	logMsg := protocol.NewLogMessage(c.label, content, protocol.StreamType(stream), pid)
-	
+
 	select {
 	case c.messageChan <- logMsg:
 		return nil
@@ -472,7 +471,7 @@ func (c *WebSocketClient) SendStatusMessage(status protocol.SessionStatus, pid i
 	}
 
 	statusMsg := protocol.NewStatusMessage(c.label, status, &pid, exitCode)
-	
+
 	select {
 	case c.messageChan <- statusMsg:
 		return nil
@@ -491,7 +490,7 @@ func (c *WebSocketClient) SendAckMessage(commandID string, success bool, message
 
 	ackMsg := protocol.NewAckMessage(c.label, success, message)
 	ackMsg.CommandID = commandID
-	
+
 	select {
 	case c.messageChan <- ackMsg:
 		return nil
@@ -509,15 +508,15 @@ func (c *WebSocketClient) handleMessages() {
 		c.connMutex.Lock()
 		c.connected = false
 		c.connMutex.Unlock()
-		
+
 		if c.OnDisconnected != nil {
 			c.OnDisconnected()
 		}
 	}()
 
-	c.conn.SetReadDeadline(time.Now().Add(c.readTimeout))
+	_ = c.conn.SetReadDeadline(time.Now().Add(c.readTimeout))
 	c.conn.SetPongHandler(func(string) error {
-		c.conn.SetReadDeadline(time.Now().Add(c.readTimeout))
+		_ = c.conn.SetReadDeadline(time.Now().Add(c.readTimeout))
 		return nil
 	})
 
@@ -542,7 +541,7 @@ func (c *WebSocketClient) handleMessages() {
 				}
 			}
 
-			c.conn.SetReadDeadline(time.Now().Add(c.readTimeout))
+			_ = c.conn.SetReadDeadline(time.Now().Add(c.readTimeout))
 		}
 	}
 }
@@ -663,7 +662,7 @@ func (c *WebSocketClient) sendMessage(msg interface{}) error {
 		return fmt.Errorf("failed to serialize message: %w", err)
 	}
 
-	c.conn.SetWriteDeadline(time.Now().Add(c.writeTimeout))
+	_ = c.conn.SetWriteDeadline(time.Now().Add(c.writeTimeout))
 	return c.conn.WriteMessage(websocket.TextMessage, data)
 }
 
@@ -743,7 +742,7 @@ func (c *WebSocketClient) Close() error {
 		// Send close message to server
 		closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "Client closing")
 		c.conn.WriteControl(websocket.CloseMessage, closeMsg, time.Now().Add(time.Second))
-		c.conn.Close()
+		_ = c.conn.Close()
 	}
 	c.connected = false
 	c.connMutex.Unlock()
@@ -776,16 +775,16 @@ func (c *WebSocketClient) RunWithReconnection() error {
 			if err == context.Canceled || err == context.DeadlineExceeded {
 				return err
 			}
-			
+
 			// Log disconnection and continue to reconnect
 			if c.OnError != nil {
 				c.OnError(fmt.Errorf("connection lost: %w", err))
 			}
-			
+
 			// Connection lost, try to reconnect
 			continue
 		}
-		
+
 		// Should only reach here on graceful shutdown
 		return nil
 	}
@@ -797,17 +796,17 @@ func (c *WebSocketClient) monitorConnection() error {
 	healthCheckInterval := c.pingInterval * 2 // Check less frequently than ping
 	ticker := time.NewTicker(healthCheckInterval)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-c.ctx.Done():
 			return c.ctx.Err()
-			
+
 		case <-ticker.C:
 			if !c.IsConnected() {
 				return fmt.Errorf("connection lost")
 			}
-			
+
 			// Optional: Add more sophisticated health checks here
 			// such as checking last pong received time, message queue health, etc.
 		}

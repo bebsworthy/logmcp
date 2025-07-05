@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/bebsworthy/logmcp/internal/config"
 	"github.com/bebsworthy/logmcp/internal/runner"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -110,36 +110,36 @@ func runCommand(cmd *cobra.Command, args []string) error {
 
 	// Create process runner with LogMCP configuration
 	runner := runner.NewProcessRunnerWithLogMCPConfig(commandStr, runLabel, serverURL, cfg)
-	
+
 	// Set up callbacks
 	setupRunnerCallbacks(runner)
-	
+
 	// Debug: Check if WebSocket client exists
 	if runner.GetWebSocketClient() == nil {
 		return fmt.Errorf("WebSocket client not initialized")
 	}
-	
+
 	// Connect to server with retry logic
 	fmt.Printf("Connecting to server at %s...\n", serverURL)
-	
+
 	if err := runner.GetWebSocketClient().ConnectWithRetry(); err != nil {
 		return fmt.Errorf("failed to connect to server: %w", err)
 	}
-	
+
 	// Always show connection confirmation
 	fmt.Printf("✓ Connected to server successfully! Session: %s\n", runner.GetWebSocketClient().GetLabel())
-	
+
 	// Run the process with signal handling
 	if verbose {
 		fmt.Printf("Starting process...\n")
 	}
-	
+
 	// Start stdin forwarding goroutine
 	go forwardStdin(runner)
-	
+
 	// Run the process
 	err = runner.RunWithSignalHandling()
-	
+
 	// Ensure all messages are sent before exiting
 	if wsClient := runner.GetWebSocketClient(); wsClient != nil {
 		if flushErr := wsClient.FlushMessages(); flushErr != nil {
@@ -150,7 +150,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		// Close the WebSocket connection gracefully
 		wsClient.Close()
 	}
-	
+
 	return err
 }
 
@@ -162,50 +162,12 @@ func getCurrentWorkingDir() string {
 	return "unknown"
 }
 
-// createWebSocketClient creates and configures a WebSocket client
-func createWebSocketClient(serverURL, label, command, workingDir string) *runner.WebSocketClient {
-	client := runner.NewWebSocketClient(serverURL, label)
-	client.SetCommand(command, workingDir, []string{"process_control", "stdin"})
-	
-	// Set up client callbacks
-	client.OnConnected = func(label string) {
-		if verbose {
-			log.Printf("Session registered with label: %s", label)
-		}
-	}
-	
-	client.OnDisconnected = func() {
-		if verbose {
-			log.Printf("Disconnected from server")
-		}
-	}
-	
-	client.OnError = func(err error) {
-		log.Printf("WebSocket error: %v", err)
-	}
-	
-	return client
-}
-
-// createProcessRunner creates and configures a process runner
-func createProcessRunner(command, label, workingDir string) *runner.ProcessRunner {
-	config := runner.ProcessRunnerConfig{
-		WorkingDir:       workingDir,
-		Environment:      nil,
-		RestartOnFailure: false,
-		MaxRestarts:      0,
-		RestartDelay:     0,
-	}
-	
-	return runner.NewProcessRunnerWithConfig(command, label, config)
-}
-
 // setupRunnerCallbacks sets up callbacks for the process runner
 func setupRunnerCallbacks(processRunner *runner.ProcessRunner) {
 	processRunner.OnProcessStart = func(pid int) {
 		fmt.Printf("Process started with PID: %d\n", pid)
 	}
-	
+
 	processRunner.OnProcessExit = func(exitCode int) {
 		if exitCode == 0 {
 			fmt.Printf("Process completed successfully.\n")
@@ -213,14 +175,14 @@ func setupRunnerCallbacks(processRunner *runner.ProcessRunner) {
 			fmt.Printf("Process exited with code: %d\n", exitCode)
 		}
 	}
-	
+
 	processRunner.OnLogLine = func(content, stream string) {
 		// Display output by default, unless silenced
 		if !silenceOutput {
 			fmt.Printf("[%s] %s\n", stream, content)
 		}
 	}
-	
+
 	processRunner.OnError = func(err error) {
 		log.Printf("Process error: %v", err)
 	}
@@ -240,7 +202,7 @@ func forwardStdin(processRunner *runner.ProcessRunner) {
 			return
 		}
 	}
-	
+
 	if err := scanner.Err(); err != nil {
 		if verbose {
 			log.Printf("Stdin scanner error: %v", err)

@@ -11,14 +11,13 @@
 //
 //	runner := runner.NewProcessRunner("npm run server", "backend", "/app", nil)
 //	runner.SetWebSocketClient(client)
-//	
+//
 //	if err := runner.Start(); err != nil {
 //		log.Fatal(err)
 //	}
-//	
+//
 //	// Wait for process or handle signals
 //	runner.Wait()
-//
 package runner
 
 import (
@@ -50,12 +49,12 @@ type ProcessRunner struct {
 	environment map[string]string
 
 	// Process state
-	cmd         *exec.Cmd
-	process     *os.Process
-	pid         int
-	running     bool
-	exitCode    *int
-	mutex       sync.RWMutex
+	cmd      *exec.Cmd
+	process  *os.Process
+	pid      int
+	running  bool
+	exitCode *int
+	mutex    sync.RWMutex
 
 	// Pipes and I/O
 	stdout      io.ReadCloser
@@ -64,12 +63,12 @@ type ProcessRunner struct {
 	stdinBuffer chan string
 
 	// Context and lifecycle
-	ctx         context.Context
-	cancel      context.CancelFunc
-	wg          sync.WaitGroup
+	ctx    context.Context
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
 
 	// WebSocket client for log streaming
-	client      *WebSocketClient
+	client *WebSocketClient
 
 	// Configuration
 	restartOnFailure bool
@@ -140,26 +139,26 @@ func NewProcessRunnerWithLogMCPConfig(command, label, serverURL string, cfg *con
 	wsClient.SetCommand(command, workingDir, []string{"process"})
 
 	pr := &ProcessRunner{
-		command:         parts[0],
-		args:            parts[1:],
-		label:           label,
-		workingDir:      workingDir,
-		environment:     make(map[string]string),
-		ctx:             ctx,
-		cancel:          cancel,
-		client:          wsClient,
+		command:          parts[0],
+		args:             parts[1:],
+		label:            label,
+		workingDir:       workingDir,
+		environment:      make(map[string]string),
+		ctx:              ctx,
+		cancel:           cancel,
+		client:           wsClient,
 		restartOnFailure: false,
-		maxRestarts:     cfg.Process.MaxRestarts,
-		restartDelay:    cfg.Process.RestartDelay,
-		stdinBuffer:     make(chan string, 100),
+		maxRestarts:      cfg.Process.MaxRestarts,
+		restartDelay:     cfg.Process.RestartDelay,
+		stdinBuffer:      make(chan string, 100),
 	}
-	
+
 	// Set up client callbacks
 	if wsClient != nil {
 		wsClient.OnCommand = pr.handleCommand
 		wsClient.OnStdinMessage = pr.handleStdinMessage
 	}
-	
+
 	return pr
 }
 
@@ -198,7 +197,7 @@ func NewProcessRunnerWithConfig(command, label string, config ProcessRunnerConfi
 // SetWebSocketClient sets the WebSocket client for log streaming
 func (pr *ProcessRunner) SetWebSocketClient(client *WebSocketClient) {
 	pr.client = client
-	
+
 	// Set up client callbacks
 	if client != nil {
 		client.OnCommand = pr.handleCommand
@@ -289,7 +288,7 @@ func (pr *ProcessRunner) handleStdout() {
 	scanner := bufio.NewScanner(pr.stdout)
 	// Set buffer limits as per specification (64KB max line size)
 	scanner.Buffer(make([]byte, 4096), 64*1024)
-	
+
 	for {
 		// Check for context cancellation first
 		select {
@@ -297,15 +296,15 @@ func (pr *ProcessRunner) handleStdout() {
 			return
 		default:
 		}
-		
+
 		// Scan for next line
 		if !scanner.Scan() {
 			// EOF or error - exit the loop
 			break
 		}
-		
+
 		line := scanner.Text()
-		
+
 		// Send to WebSocket client
 		if pr.client != nil {
 			pr.client.SendLogMessage(line, "stdout", pr.pid)
@@ -334,7 +333,7 @@ func (pr *ProcessRunner) handleStderr() {
 	scanner := bufio.NewScanner(pr.stderr)
 	// Set buffer limits as per specification (64KB max line size)
 	scanner.Buffer(make([]byte, 4096), 64*1024)
-	
+
 	for {
 		// Check for context cancellation first
 		select {
@@ -342,15 +341,15 @@ func (pr *ProcessRunner) handleStderr() {
 			return
 		default:
 		}
-		
+
 		// Scan for next line
 		if !scanner.Scan() {
 			// EOF or error - exit the loop
 			break
 		}
-		
+
 		line := scanner.Text()
-		
+
 		// Send to WebSocket client
 		if pr.client != nil {
 			pr.client.SendLogMessage(line, "stderr", pr.pid)
@@ -460,7 +459,7 @@ func (pr *ProcessRunner) handleProcess() {
 	if pr.restartOnFailure && exitCode != 0 && pr.restartCount < pr.maxRestarts {
 		pr.restartCount++
 		log.Printf("Restarting process in %v (attempt %d/%d)", pr.restartDelay, pr.restartCount, pr.maxRestarts)
-		
+
 		// Send restarting status
 		if pr.client != nil {
 			pr.client.SendStatusMessage(protocol.StatusRestarting, pr.pid, &exitCode)

@@ -15,7 +15,7 @@
 //	defer sm.Close()
 //
 //	// Create a session for a backend process
-//	session, err := sm.CreateSession("backend", "npm run server", "/app", 
+//	session, err := sm.CreateSession("backend", "npm run server", "/app",
 //		[]string{"process_control"}, server.ModeRun, runArgs)
 //	if err != nil {
 //		log.Fatal(err)
@@ -40,9 +40,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"github.com/bebsworthy/logmcp/internal/buffer"
 	"github.com/bebsworthy/logmcp/internal/protocol"
+	"github.com/gorilla/websocket"
 )
 
 // RunnerMode represents how a session was created
@@ -81,12 +81,12 @@ type Session struct {
 	RunnerArgs       interface{}            `json:"runner_args"`       // Mode-specific arguments
 
 	// Internal fields for session management
-	mutex              sync.RWMutex  `json:"-"`
-	restartMutex       sync.Mutex    `json:"-"` // Serializes restart operations
-	lastActivityTime   time.Time     `json:"-"`
-	processTerminated  bool          `json:"-"`
-	connectionLostTime *time.Time    `json:"-"`
-	cleanupScheduled   bool          `json:"-"`
+	mutex              sync.RWMutex `json:"-"`
+	restartMutex       sync.Mutex   `json:"-"` // Serializes restart operations
+	lastActivityTime   time.Time    `json:"-"`
+	processTerminated  bool         `json:"-"`
+	connectionLostTime *time.Time   `json:"-"`
+	cleanupScheduled   bool         `json:"-"`
 }
 
 // RunnerArgs structs for different modes
@@ -112,12 +112,12 @@ type ManagedArgs struct {
 // SessionManager manages all active sessions
 type SessionManager struct {
 	mutex            sync.RWMutex
-	sessions         map[string]*Session          // label -> Session
-	cleanupScheduled map[string]time.Time         // label -> cleanup time
+	sessions         map[string]*Session  // label -> Session
+	cleanupScheduled map[string]time.Time // label -> cleanup time
 	ctx              context.Context
 	cancel           context.CancelFunc
 	cleanupWg        sync.WaitGroup
-	startTime        time.Time                    // When the session manager was created
+	startTime        time.Time // When the session manager was created
 
 	// Configuration
 	cleanupDelay    time.Duration // How long to wait after disconnection before cleanup
@@ -176,12 +176,12 @@ func (sm *SessionManager) CreateSession(label, command, workingDir string, capab
 		runnerMode := existingSession.RunnerMode
 		status := existingSession.Status
 		existingSession.mutex.RUnlock()
-		
+
 		// Only reuse label if session is disconnected AND not running
 		// Managed processes may be disconnected but still running
-		if connStatus == ConnectionDisconnected && 
-		   status != protocol.StatusRunning && 
-		   runnerMode != ModeManaged {
+		if connStatus == ConnectionDisconnected &&
+			status != protocol.StatusRunning &&
+			runnerMode != ModeManaged {
 			// Remove the old disconnected session to reuse the label
 			sm.removeSessionUnsafe(label)
 		}
@@ -302,7 +302,7 @@ func (sm *SessionManager) UpdateSessionStatus(label string, status protocol.Sess
 		session.ExitTime = &now
 
 		// Debug: Log exit details
-		log.Printf("[DEBUG] Session %s: status %s->%s, exitCode=%d, exitTime=%v", 
+		log.Printf("[DEBUG] Session %s: status %s->%s, exitCode=%d, exitTime=%v",
 			label, oldStatus, status, *exitCode, now)
 
 		// If the connection is also lost, schedule cleanup
@@ -310,7 +310,7 @@ func (sm *SessionManager) UpdateSessionStatus(label string, status protocol.Sess
 			sm.scheduleCleanup(label)
 		}
 	} else {
-		log.Printf("[DEBUG] Session %s: status %s->%s, pid=%d", 
+		log.Printf("[DEBUG] Session %s: status %s->%s, pid=%d",
 			label, oldStatus, status, pid)
 	}
 
@@ -457,15 +457,15 @@ func (sm *SessionManager) GetSessionStats() SessionManagerStats {
 	defer sm.mutex.RUnlock()
 
 	stats := SessionManagerStats{
-		TotalSessions:   len(sm.sessions),
-		ActiveSessions:  0,
-		StoppedSessions: 0,
-		CrashedSessions: 0,
-		ConnectedSessions: 0,
+		TotalSessions:        len(sm.sessions),
+		ActiveSessions:       0,
+		StoppedSessions:      0,
+		CrashedSessions:      0,
+		ConnectedSessions:    0,
 		DisconnectedSessions: 0,
-		ScheduledForCleanup: len(sm.cleanupScheduled),
-		TotalLogEntries: 0,
-		TotalBufferSize: 0,
+		ScheduledForCleanup:  len(sm.cleanupScheduled),
+		TotalLogEntries:      0,
+		TotalBufferSize:      0,
 	}
 
 	for _, session := range sm.sessions {
