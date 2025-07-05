@@ -153,17 +153,28 @@ verify_installation() {
 
 # Show usage
 usage() {
-    echo "Usage: $0 [VERSION]"
+    echo "Usage: $0 [-y|--yes] [VERSION]"
     echo ""
     echo "Install LogMCP binary"
+    echo ""
+    echo "Options:"
+    echo "  -y, --yes  Skip confirmation prompt"
     echo ""
     echo "Arguments:"
     echo "  VERSION    Optional: specific version to install (e.g., 20240705143215)"
     echo "             If not specified, installs the latest release"
     echo ""
+    echo "Environment variables:"
+    echo "  LOGMCP_INSTALL_YES=true  Skip confirmation prompt"
+    echo ""
     echo "Examples:"
-    echo "  $0                    # Install latest version"
-    echo "  $0 20240705143215  # Install specific version"
+    echo "  $0                    # Install latest version (interactive)"
+    echo "  $0 -y                 # Install latest version (non-interactive)"
+    echo "  $0 20240705143215     # Install specific version"
+    echo "  $0 -y 20240705143215  # Install specific version (non-interactive)"
+    echo ""
+    echo "Non-interactive installation:"
+    echo "  curl -sSL https://raw.githubusercontent.com/bebsworthy/logmcp/main/install.sh | bash -s -- -y"
     exit 0
 }
 
@@ -172,6 +183,13 @@ main() {
     # Check for help
     if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
         usage
+    fi
+    
+    # Check for -y flag
+    SKIP_CONFIRM=""
+    if [ "$1" = "-y" ] || [ "$1" = "--yes" ]; then
+        SKIP_CONFIRM="$1"
+        shift # Remove the flag from arguments
     fi
     
     # Check for version parameter
@@ -186,11 +204,29 @@ main() {
     echo "⚠️  WARNING: This software is 100% AI-generated."
     echo "   Use at your own risk. No warranty provided."
     echo ""
-    read -p "Do you want to continue? (y/N) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "Installation cancelled."
-        exit 0
+    
+    # Check if we should skip confirmation (for CI or automated installs)
+    if [ -n "$SKIP_CONFIRM" ] || [ "$LOGMCP_INSTALL_YES" = "true" ]; then
+        echo "Proceeding with installation (confirmation skipped)..."
+    else
+        # Try to read from terminal if available, otherwise skip confirmation
+        if [ -t 0 ]; then
+            read -p "Do you want to continue? (y/N) " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo "Installation cancelled."
+                exit 0
+            fi
+        else
+            echo "Running in non-interactive mode. To skip this prompt, use:"
+            echo "  curl -sSL https://raw.githubusercontent.com/bebsworthy/logmcp/main/install.sh | bash -s -- -y"
+            echo ""
+            echo "Or set environment variable:"
+            echo "  curl -sSL https://raw.githubusercontent.com/bebsworthy/logmcp/main/install.sh | LOGMCP_INSTALL_YES=true bash"
+            echo ""
+            echo "Installation cancelled. Run with -y flag or LOGMCP_INSTALL_YES=true to proceed."
+            exit 1
+        fi
     fi
     
     detect_platform

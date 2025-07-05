@@ -37,10 +37,13 @@ Download the latest release for your platform from the [releases page](https://g
 Or use the installation script:
 ```bash
 # Install or update to latest version (installs to ~/.local/bin)
-curl -sSL https://raw.githubusercontent.com/bebsworthy/logmcp/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/bebsworthy/logmcp/main/install.sh | bash -s -- -y
 
 # Install or update to specific version
-curl -sSL https://raw.githubusercontent.com/bebsworthy/logmcp/main/install.sh | bash -s -- 2024-07-05T14:32:15
+curl -sSL https://raw.githubusercontent.com/bebsworthy/logmcp/main/install.sh | bash -s -- -y 20240705143215
+
+# Interactive installation (will prompt for confirmation)
+curl -sSL https://raw.githubusercontent.com/bebsworthy/logmcp/main/install.sh -o install.sh && bash install.sh
 ```
 
 **Note:** 
