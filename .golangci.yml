@@ -1,7 +1,4 @@
 # golangci-lint configuration
-# https://golangci-lint.run/usage/configuration/
-
-# version is required to determine the set of linters and settings
 version: "2"
 
 linters:
@@ -12,22 +9,6 @@ linters:
     - ineffassign
     - unused
     - misspell
-
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-    exclude-functions:
-      - io.Copy
-      - fmt.Printf
-      - fmt.Fprintf
-      - fmt.Fprintln
-
-issues:
-  exclude-rules:
-    # Exclude some linters from test files
-    - path: _test\.go
-      linters:
-        - errcheck
 
 run:
   timeout: 5m
