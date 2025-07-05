@@ -1,0 +1,127 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Dependency directories (remove the comment below to include it)
+# vendor/
+
+# Go workspace file
+go.work
+go.work.sum
+
+# env file
+.env
+
+# Air live reload
+.air.toml
+tmp/
+
+# Binary
+logmcp
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test coverage
+coverage.txt
+coverage.html
+*.coverprofile
+
+# Logs
+*.log
+
+# Config files (optional - uncomment if you want to ignore local configs)
+# config.yaml
+# config.yml
+# config.toml
+
+# Build directories
+dist/
+build/
+bin/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# OS generated files
+Thumbs.db
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Desktop.ini
+
+# Project specific
+test_output.log
+test_single.log
+*.pid
+server.log
+server_err.log
+server_verbose.log
+
+# Scripts and test files that seem temporary
+test_*.sh
+*_issue.md
+*_issue_*.md
+connection_issue_analysis.md
+test_features_report.md
+
+# Documentation build
+docs/_build/
+docs/_site/
+site/
+
+# Profiling
+*.prof
+*.pprof
+
+# Certificates
+*.pem
+*.key
+*.crt
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Archives
+*.tar
+*.tar.gz
+*.zip
+*.gz
+*.tgz
+
+# Benchmarks
+bench/
+benchmarks/
+
+# Local environment
+.envrc
+.tool-versions
+
+# Debug
+debug/
+debug.test
+
+# Generated files
+generated/
+gen/
