@@ -65,7 +65,7 @@ cd logmcp
 go build -o logmcp .
 ```
 
-**Note:** LogMCP automatically creates a new release on every push to the main branch, versioned by timestamp (YYYY-MM-DDTHH:MM:SS).
+**Note:** LogMCP automatically creates a new release when code changes are pushed to the main branch, versioned by timestamp (YYYYMMDDHHMMSS). Documentation-only changes do not trigger new releases.
 
 ## Quick Start
 
