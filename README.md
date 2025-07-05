@@ -242,6 +242,9 @@ LOGMCP_VERBOSE=true
 # AI assistant can alert on errors and suggest fixes
 ```
 
+*RealHuman(TM) comment*: 
+I didn't want to intervene but I need to mention that while it could technically work you'd be stupid to trust this tool in production. It has ABSOLUTELY ZERO security and the code might be absolute and utter garbage that will trash your servers, steal your cat and empty your bank account (I wouldn't know I purposedly didn't read it as an exercise); in any case it's most likely not robust enough to be running your production service. DON'T DO THAT !
+
 ## Command Reference
 
 ### `logmcp serve`
