@@ -79,7 +79,7 @@ LogMCP is designed to work seamlessly with Claude Code and other MCP clients.
 
 3. **Use LogMCP through Claude Code:**
    ```
-   You: Start monitoring my web application
+   You: Start monitoring my web application with logmcp
    Claude: I'll start your web application and monitor its logs using LogMCP...
    
    You: Show me the recent error logs
@@ -93,7 +93,7 @@ LogMCP is designed to work seamlessly with Claude Code and other MCP clients.
 
 Once LogMCP is configured, Claude can:
 
-- **Start processes:** "Start my React development server"
+- **Start processes:** "Start my React development server with logmcp"
 - **Monitor logs:** "Show me the last 50 log entries from the backend"
 - **Debug issues:** "What errors occurred in the last 5 minutes?"
 - **Process control:** "Restart the crashed service"
