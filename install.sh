@@ -127,15 +127,6 @@ install_binary() {
     
     # Install the binary
     mv "$binary_path" "${INSTALL_DIR}/${BINARY_NAME}"
-    
-    # Check if ~/.local/bin is in PATH
-    if ! echo "$PATH" | grep -q "$HOME/.local/bin"; then
-        echo "" >&2
-        info "Note: $HOME/.local/bin is not in your PATH."
-        info "Add this line to your shell configuration file (.bashrc, .zshrc, etc.):"
-        echo "  export PATH=\"\$HOME/.local/bin:\$PATH\"" >&2
-        echo "" >&2
-    fi
 }
 
 # Verify installation
@@ -144,8 +135,6 @@ verify_installation() {
         success "LogMCP installed successfully!"
         echo "" >&2
         "$BINARY_NAME" version >&2
-        echo "" >&2
-        info "Run 'logmcp serve' to start the server"
     else
         error "Installation verification failed"
     fi
@@ -236,11 +225,56 @@ main() {
     install_binary "$BINARY_PATH"
     verify_installation
     
+    # Show installation path and PATH configuration if needed
     echo "" >&2
+    success "Installation complete! LogMCP is installed at: ${INSTALL_DIR}/${BINARY_NAME}"
+    echo "" >&2
+    
+    # Check if ~/.local/bin is in PATH
+    if ! echo "$PATH" | grep -q "$HOME/.local/bin"; then
+        info "⚠️  Important: $HOME/.local/bin is not in your PATH"
+        echo "" >&2
+        info "To use logmcp from anywhere, add this directory to your PATH:"
+        echo "" >&2
+        
+        # Detect shell and provide specific instructions
+        if [ -n "$BASH_VERSION" ]; then
+            echo "   echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc" >&2
+            echo "   source ~/.bashrc" >&2
+        elif [ -n "$ZSH_VERSION" ]; then
+            echo "   echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc" >&2
+            echo "   source ~/.zshrc" >&2
+        else
+            # Generic instructions
+            echo "   Add to your shell configuration file (.bashrc, .zshrc, etc.):" >&2
+            echo "   export PATH=\"\$HOME/.local/bin:\$PATH\"" >&2
+        fi
+        echo "" >&2
+    fi
+    
     echo "Next steps:" >&2
-    echo "1. Start the server: logmcp serve" >&2
-    echo "2. Run a process: logmcp run --label my-app -- <command>" >&2
-    echo "3. Configure Claude Code: See https://github.com/${REPO}#claude-code-integration" >&2
+    echo "" >&2
+    info "1. Configure your LLM agent (Claude, Cursor, etc.) to use LogMCP:"
+    echo "" >&2
+    echo "   For Claude Code:" >&2
+    echo "   claude mcp add logmcp ${INSTALL_DIR}/${BINARY_NAME} serve" >&2
+    echo "" >&2
+    echo "   For other MCP clients, add to your configuration:" >&2
+    echo "   {" >&2
+    echo "     \"mcpServers\": {" >&2
+    echo "       \"logmcp\": {" >&2
+    echo "         \"command\": \"${INSTALL_DIR}/${BINARY_NAME}\"," >&2
+    echo "         \"args\": [\"serve\"]" >&2
+    echo "       }" >&2
+    echo "     }" >&2
+    echo "   }" >&2
+    echo "" >&2
+    info "2. Start using LogMCP in your LLM conversation:"
+    echo "   - \"Use logmcp to run my tests and show me the output\"" >&2
+    echo "   - \"Monitor my server logs with logmcp\"" >&2
+    echo "   - \"Start my development environment with logmcp\"" >&2
+    echo "" >&2
+    info "📚 Full documentation: https://github.com/${REPO}#quick-start"
 }
 
 # Run main function
