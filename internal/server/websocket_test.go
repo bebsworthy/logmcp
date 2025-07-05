@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -484,23 +485,44 @@ func TestWebSocketServer_MultipleConnections(t *testing.T) {
 	// Convert http:// to ws://
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
 
+	numClients := 3
+	
+	// Phase synchronization barriers
+	connectBarrier := make(chan struct{})
+	registeredBarrier := make(chan struct{})
+	verifyDone := make(chan struct{})
+	
+	// Atomic counters for tracking progress
+	var connectedCount int32
+	var registeredCount int32
+	
+	// Error collection
+	errors := make(chan error, numClients)
+	
 	// Create multiple WebSocket clients
 	var wg sync.WaitGroup
-
-	numClients := 3
 	for i := 0; i < numClients; i++ {
 		wg.Add(1)
 		go func(clientNum int) {
 			defer wg.Done()
-
+			
+			// Phase 1: Connect
 			client, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 			if err != nil {
-				t.Errorf("Failed to connect client %d: %v", clientNum, err)
+				errors <- fmt.Errorf("client %d connection failed: %w", clientNum, err)
 				return
 			}
 			defer client.Close()
-
-			// Register session
+			
+			// Track connection
+			if atomic.AddInt32(&connectedCount, 1) == int32(numClients) {
+				close(connectBarrier)
+			}
+			
+			// Wait for all clients to connect
+			<-connectBarrier
+			
+			// Phase 2: Register session
 			regMsg := protocol.NewSessionRegistrationMessage(
 				fmt.Sprintf("backend-%d", clientNum),
 				"npm run server",
@@ -508,45 +530,73 @@ func TestWebSocketServer_MultipleConnections(t *testing.T) {
 				[]string{},
 			)
 
-			msgData, _ := protocol.SerializeMessage(regMsg)
-			client.WriteMessage(websocket.TextMessage, msgData)
+			msgData, err := protocol.SerializeMessage(regMsg)
+			if err != nil {
+				errors <- fmt.Errorf("client %d serialize failed: %w", clientNum, err)
+				return
+			}
+			
+			if err := client.WriteMessage(websocket.TextMessage, msgData); err != nil {
+				errors <- fmt.Errorf("client %d write registration failed: %w", clientNum, err)
+				return
+			}
 
 			// Read acknowledgment
-			client.ReadMessage()
-
-			// Send a log message
-			sessions := sm.ListSessions()
-			var sessionLabel string
-			for _, session := range sessions {
-				if session.Label == fmt.Sprintf("backend-%d", clientNum) {
-					sessionLabel = session.Label
-					break
-				}
+			_, _, err = client.ReadMessage()
+			if err != nil {
+				errors <- fmt.Errorf("client %d read ack failed: %w", clientNum, err)
+				return
 			}
-
-			if sessionLabel != "" {
-				logMsg := protocol.NewLogMessage(
-					fmt.Sprintf("backend-%d", clientNum),
-					fmt.Sprintf("Log from client %d", clientNum),
-					protocol.StreamStdout,
-					1000+clientNum,
-				)
-
-				msgData, _ := protocol.SerializeMessage(logMsg)
-				client.WriteMessage(websocket.TextMessage, msgData)
+			
+			// Track registration
+			if atomic.AddInt32(&registeredCount, 1) == int32(numClients) {
+				close(registeredBarrier)
 			}
+			
+			// Wait for all clients to register
+			<-registeredBarrier
 
-			// Keep connection alive for a bit
-			time.Sleep(50 * time.Millisecond)
+			// Phase 3: Send a log message
+			logMsg := protocol.NewLogMessage(
+				fmt.Sprintf("backend-%d", clientNum),
+				fmt.Sprintf("Log from client %d", clientNum),
+				protocol.StreamStdout,
+				1000+clientNum,
+			)
+
+			msgData, err = protocol.SerializeMessage(logMsg)
+			if err != nil {
+				errors <- fmt.Errorf("client %d serialize log failed: %w", clientNum, err)
+				return
+			}
+			
+			if err := client.WriteMessage(websocket.TextMessage, msgData); err != nil {
+				errors <- fmt.Errorf("client %d write log failed: %w", clientNum, err)
+				return
+			}
+			
+			// Phase 4: Keep connection alive until verification is done
+			<-verifyDone
 		}(i)
 	}
-
-	wg.Wait()
-
-	// Verify all sessions were created
+	
+	// Wait for all registrations to complete
+	select {
+	case <-registeredBarrier:
+		// All clients registered successfully
+	case err := <-errors:
+		t.Fatalf("Client error during setup: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("Timeout waiting for clients to register")
+	}
+	
+	// NOW we can safely verify - all connections are established and registered
 	sessions := sm.ListSessions()
 	if len(sessions) != numClients {
 		t.Errorf("Expected %d sessions, got %d", numClients, len(sessions))
+		for i, s := range sessions {
+			t.Logf("  Session %d: %s", i, s.Label)
+		}
 	}
 
 	// Verify connection stats
@@ -557,6 +607,20 @@ func TestWebSocketServer_MultipleConnections(t *testing.T) {
 
 	if stats.RegisteredSessions != numClients {
 		t.Errorf("Expected %d registered sessions, got %d", numClients, stats.RegisteredSessions)
+	}
+	
+	// Signal goroutines they can now close
+	close(verifyDone)
+	
+	// Wait for all goroutines to complete
+	wg.Wait()
+	
+	// Check for any errors that occurred during execution
+	select {
+	case err := <-errors:
+		t.Fatalf("Client error: %v", err)
+	default:
+		// No errors
 	}
 }
 
