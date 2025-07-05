@@ -14,6 +14,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for commit analysis
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -28,14 +30,120 @@ jobs:
       - name: Run tests
         run: go test ./...
 
-      - name: Build binaries
+      - name: Generate Release Notes
+        id: release_notes
         run: |
           # Get version info
           BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%S)
+          TAG_NAME=$(date -u +%Y%m%d%H%M%S)
           GIT_COMMIT=$(git rev-parse --short HEAD)
           
-          # Export for later steps
+          # Get the last release tag (if any)
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          
+          # Generate categorized release notes
+          {
+            echo "## What's Changed"
+            echo ""
+            
+            # Features
+            if [ -n "$LAST_TAG" ]; then
+              FEAT_COMMITS=$(git log $LAST_TAG..HEAD --pretty=format:"%s" | grep -E "^feat(\(.*\))?:" || true)
+            else
+              FEAT_COMMITS=$(git log --pretty=format:"%s" | grep -E "^feat(\(.*\))?:" || true)
+            fi
+            
+            if [ -n "$FEAT_COMMITS" ]; then
+              echo "### 🚀 Features"
+              echo "$FEAT_COMMITS" | while IFS= read -r commit; do
+                # Remove feat: prefix and format
+                cleaned=$(echo "$commit" | sed -E 's/^feat(\(.*\))?:\s*//')
+                echo "- $cleaned"
+              done
+              echo ""
+            fi
+            
+            # Bug Fixes
+            if [ -n "$LAST_TAG" ]; then
+              FIX_COMMITS=$(git log $LAST_TAG..HEAD --pretty=format:"%s" | grep -E "^fix(\(.*\))?:" || true)
+            else
+              FIX_COMMITS=$(git log --pretty=format:"%s" | grep -E "^fix(\(.*\))?:" || true)
+            fi
+            
+            if [ -n "$FIX_COMMITS" ]; then
+              echo "### 🐛 Bug Fixes"
+              echo "$FIX_COMMITS" | while IFS= read -r commit; do
+                cleaned=$(echo "$commit" | sed -E 's/^fix(\(.*\))?:\s*//')
+                echo "- $cleaned"
+              done
+              echo ""
+            fi
+            
+            # Refactoring
+            if [ -n "$LAST_TAG" ]; then
+              REFACTOR_COMMITS=$(git log $LAST_TAG..HEAD --pretty=format:"%s" | grep -E "^refactor(\(.*\))?:" || true)
+            else
+              REFACTOR_COMMITS=$(git log --pretty=format:"%s" | grep -E "^refactor(\(.*\))?:" || true)
+            fi
+            
+            if [ -n "$REFACTOR_COMMITS" ]; then
+              echo "### ♻️ Refactoring"
+              echo "$REFACTOR_COMMITS" | while IFS= read -r commit; do
+                cleaned=$(echo "$commit" | sed -E 's/^refactor(\(.*\))?:\s*//')
+                echo "- $cleaned"
+              done
+              echo ""
+            fi
+            
+            # Documentation
+            if [ -n "$LAST_TAG" ]; then
+              DOCS_COMMITS=$(git log $LAST_TAG..HEAD --pretty=format:"%s" | grep -E "^docs(\(.*\))?:" || true)
+            else
+              DOCS_COMMITS=$(git log --pretty=format:"%s" | grep -E "^docs(\(.*\))?:" || true)
+            fi
+            
+            if [ -n "$DOCS_COMMITS" ]; then
+              echo "### 📚 Documentation"
+              echo "$DOCS_COMMITS" | while IFS= read -r commit; do
+                cleaned=$(echo "$commit" | sed -E 's/^docs(\(.*\))?:\s*//')
+                echo "- $cleaned"
+              done
+              echo ""
+            fi
+            
+            # Chores & Other
+            if [ -n "$LAST_TAG" ]; then
+              CHORE_COMMITS=$(git log $LAST_TAG..HEAD --pretty=format:"%s" | grep -E "^(chore|build|ci|test|perf|style)(\(.*\))?:" || true)
+            else
+              CHORE_COMMITS=$(git log --pretty=format:"%s" | grep -E "^(chore|build|ci|test|perf|style)(\(.*\))?:" || true)
+            fi
+            
+            if [ -n "$CHORE_COMMITS" ]; then
+              echo "### 🔧 Maintenance"
+              echo "$CHORE_COMMITS" | while IFS= read -r commit; do
+                cleaned=$(echo "$commit" | sed -E 's/^(chore|build|ci|test|perf|style)(\(.*\))?:\s*//')
+                echo "- $cleaned"
+              done
+              echo ""
+            fi
+            
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/commits/$TAG_NAME"
+            
+          } > release_notes.md
+          
+          # Save release notes to environment
+          echo 'RELEASE_NOTES<<EOF' >> $GITHUB_ENV
+          cat release_notes.md >> $GITHUB_ENV
+          echo 'EOF' >> $GITHUB_ENV
+          
+          # Export other variables
           echo "BUILD_DATE=${BUILD_DATE}" >> $GITHUB_ENV
+          echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_ENV
+
+      - name: Build binaries
+        run: |
+          # Get version info
+          GIT_COMMIT=$(git rev-parse --short HEAD)
           
           # Build flags
           LDFLAGS="-X github.com/bebsworthy/logmcp/cmd.BuildDate=${BUILD_DATE} -X github.com/bebsworthy/logmcp/cmd.GitCommit=${GIT_COMMIT}"
@@ -54,14 +162,16 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ env.BUILD_DATE }}
-          name: Release ${{ env.BUILD_DATE }}
+          tag_name: ${{ env.TAG_NAME }}
+          name: Release ${{ env.TAG_NAME }}
           files: |
             logmcp-darwin-amd64
             logmcp-darwin-arm64
             logmcp-linux-amd64
             checksums.txt
           body: |
+            ${{ env.RELEASE_NOTES }}
+            
             ## Installation
 
             ### Download Binary
@@ -70,21 +180,21 @@ jobs:
             
             **macOS (Intel)**
             ```bash
-            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/logmcp-darwin-amd64 -o logmcp
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ env.TAG_NAME }}/logmcp-darwin-amd64 -o logmcp
             chmod +x logmcp
             sudo mv logmcp /usr/local/bin/
             ```
             
             **macOS (Apple Silicon)**
             ```bash
-            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/logmcp-darwin-arm64 -o logmcp
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ env.TAG_NAME }}/logmcp-darwin-arm64 -o logmcp
             chmod +x logmcp
             sudo mv logmcp /usr/local/bin/
             ```
             
             **Linux**
             ```bash
-            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/logmcp-linux-amd64 -o logmcp
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ env.TAG_NAME }}/logmcp-linux-amd64 -o logmcp
             chmod +x logmcp
             sudo mv logmcp /usr/local/bin/
             ```

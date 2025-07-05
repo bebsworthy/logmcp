@@ -1,7 +1,7 @@
 # LogMCP
 
-[![Release](https://github.com/bebsworthy/logmcp/actions/workflows/release.yml/badge.svg)](https://github.com/bebsworthy/logmcp/actions/workflows/release.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/bebsworthy/logmcp)](https://goreportcard.com/report/github.com/bebsworthy/logmcp)
+[![Release](https://github.com/bebsworthy/logmcp/actions/workflows/release.yml/badge.svg?)](https://github.com/bebsworthy/logmcp/actions/workflows/release.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/bebsworthy/logmcp?)](https://goreportcard.com/report/github.com/bebsworthy/logmcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > ⚠️ **IMPORTANT DISCLAIMER**

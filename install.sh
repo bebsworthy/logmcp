@@ -158,12 +158,12 @@ usage() {
     echo "Install LogMCP binary"
     echo ""
     echo "Arguments:"
-    echo "  VERSION    Optional: specific version to install (e.g., 2024-07-05T14:32:15)"
+    echo "  VERSION    Optional: specific version to install (e.g., 20240705143215)"
     echo "             If not specified, installs the latest release"
     echo ""
     echo "Examples:"
     echo "  $0                    # Install latest version"
-    echo "  $0 2024-07-05T14:32:15  # Install specific version"
+    echo "  $0 20240705143215  # Install specific version"
     exit 0
 }
 
