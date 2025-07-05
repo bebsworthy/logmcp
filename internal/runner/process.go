@@ -259,7 +259,7 @@ func (pr *ProcessRunner) Start() error {
 	// Send status update to server
 	if pr.client != nil {
 		if err := pr.client.SendStatusMessage(protocol.StatusRunning, pr.pid, nil); err != nil {
-			slog.Warn("Failed to send status message", 
+			slog.Warn("Failed to send status message",
 				slog.String("label", pr.label),
 				slog.String("error", err.Error()))
 		}

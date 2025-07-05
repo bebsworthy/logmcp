@@ -596,7 +596,7 @@ func (c *WebSocketClient) processMessage(message []byte) error {
 			if err := c.OnCommand(string(m.Action), m.Signal); err != nil {
 				// Send error acknowledgment
 				if ackErr := c.SendAckMessage(m.CommandID, false, err.Error()); ackErr != nil {
-					slog.Error("Failed to send error acknowledgment", 
+					slog.Error("Failed to send error acknowledgment",
 						slog.String("error", ackErr.Error()),
 						slog.String("command_id", m.CommandID))
 				}
