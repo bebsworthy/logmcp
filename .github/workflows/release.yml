@@ -44,7 +44,8 @@ jobs:
           GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o logmcp-darwin-amd64 .
           GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o logmcp-darwin-arm64 .
           GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o logmcp-linux-amd64 .
-          GOOS=windows GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o logmcp-windows-amd64.exe .
+          # Windows build disabled because I don't have a Windows machine to test it
+          # GOOS=windows GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o logmcp-windows-amd64.exe .
 
       - name: Create checksums
         run: |
@@ -59,7 +60,6 @@ jobs:
             logmcp-darwin-amd64
             logmcp-darwin-arm64
             logmcp-linux-amd64
-            logmcp-windows-amd64.exe
             checksums.txt
           body: |
             ## Installation
@@ -88,8 +88,11 @@ jobs:
             chmod +x logmcp
             sudo mv logmcp /usr/local/bin/
             ```
-            
             **Windows**
+
+            Windows binaries are not currently built due to lack of testing environment and due to the app reliance on posix signal handling.
+
+            <!--
             
             Download `logmcp-windows-amd64.exe` and add it to your PATH.
             
@@ -98,6 +101,7 @@ jobs:
             ```bash
             curl -sSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh | bash
             ```
+            -->
             
             ## Disclaimer
             
