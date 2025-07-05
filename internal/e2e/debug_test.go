@@ -10,8 +10,8 @@ func TestDebugSimpleEcho(t *testing.T) {
 	ts := SetupTest(t)
 	defer ts.Cleanup()
 
-	// Start a simple echo process
-	err := ts.StartTestProcess("echo-test", "echo", "Hello World")
+	// Start a simple echo process using sh -c to ensure output is captured
+	err := ts.StartTestProcess("echo-test", "sh", "-c", "echo 'Hello World'")
 	if err != nil {
 		t.Fatalf("Failed to start echo process: %v", err)
 	}
