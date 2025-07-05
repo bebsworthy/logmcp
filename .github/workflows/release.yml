@@ -9,7 +9,52 @@ permissions:
   contents: write
 
 jobs:
+  # First job: detect what changed
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      requires-release: ${{ steps.filter.outputs.requires-release }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            requires-release:
+              - '**/*.go'
+              - 'go.mod'
+              - 'go.sum'
+              - 'cmd/**'
+              - 'internal/**'
+              - 'main.go'
+              - '.github/workflows/release.yml'
+            docs-only:
+              - '*.md'
+              - 'LICENSE'
+              - '.gitignore'
+              - 'install.sh'
+              - 'documentation/**'
+              - '.github/workflows/lint.yml'
+
+  # Optional: Log when we skip release
+  skip-release:
+    needs: changes
+    if: needs.changes.outputs.requires-release == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip Release
+        run: |
+          echo "📝 Skipping release - only documentation or configuration files were changed"
+          echo "Files that don't trigger releases:"
+          echo "- Markdown files (*.md)"
+          echo "- install.sh script"
+          echo "- License, .gitignore"
+          echo "- Documentation folder"
+
   release:
+    needs: changes
+    if: needs.changes.outputs.requires-release == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
