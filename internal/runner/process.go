@@ -680,7 +680,14 @@ func (pr *ProcessRunner) Stop() error {
 	// Send SIGTERM first
 	if err := process.Signal(syscall.SIGTERM); err != nil {
 		// If SIGTERM fails, try SIGKILL
-		return process.Kill()
+		if killErr := process.Kill(); killErr != nil {
+			return killErr
+		}
+		// Update running state after successful kill
+		pr.mutex.Lock()
+		pr.running = false
+		pr.mutex.Unlock()
+		return nil
 	}
 
 	// Wait for graceful shutdown with timeout
@@ -692,10 +699,21 @@ func (pr *ProcessRunner) Stop() error {
 
 	select {
 	case <-done:
+		// Process stopped successfully, update running state
+		pr.mutex.Lock()
+		pr.running = false
+		pr.mutex.Unlock()
 		return nil
 	case <-time.After(10 * time.Second):
 		// Force kill if graceful shutdown takes too long
-		return process.Kill()
+		if err := process.Kill(); err != nil {
+			return err
+		}
+		// Update running state after successful kill
+		pr.mutex.Lock()
+		pr.running = false
+		pr.mutex.Unlock()
+		return nil
 	}
 }
 
@@ -817,13 +835,12 @@ func (pr *ProcessRunner) WaitForProcessCompletion() error {
 		}
 	}()
 
-	// Wait for process to exit or context cancellation
-	select {
-	case <-processDone:
-		return nil
-	case <-pr.ctx.Done():
-		return pr.ctx.Err()
-	}
+	// Wait for process to exit
+	<-processDone
+	
+	// Process has exited normally, return nil even if context was cancelled
+	// The context is cancelled by handleProcess after the process exits, which is normal
+	return nil
 }
 
 // RunWithSignalHandling runs the process with signal handling for graceful shutdown
