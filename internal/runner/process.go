@@ -290,39 +290,88 @@ func (pr *ProcessRunner) handleStdout() {
 		}
 	}()
 
-	scanner := bufio.NewScanner(pr.stdout)
-	// Set buffer limits as per specification (64KB max line size)
-	scanner.Buffer(make([]byte, 4096), 64*1024)
+	reader := bufio.NewReaderSize(pr.stdout, 64*1024) // 64KB buffer
+	lineChan := make(chan string, 100) // Buffer for performance
+	errChan := make(chan error, 1)
+	
+	// Start a goroutine to read lines
+	readerDone := make(chan struct{})
+	go func() {
+		defer close(readerDone)
+		defer close(lineChan)
+		defer close(errChan)
+		
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				if err != io.EOF {
+					select {
+					case errChan <- err:
+					case <-pr.ctx.Done():
+					}
+				} else if len(line) > 0 {
+					// Handle partial line at EOF
+					select {
+					case lineChan <- strings.TrimRight(line, "\n\r"):
+					case <-pr.ctx.Done():
+					}
+				}
+				return
+			}
+			
+			// Send line without blocking indefinitely
+			select {
+			case lineChan <- strings.TrimRight(line, "\n\r"):
+			case <-pr.ctx.Done():
+				return
+			}
+		}
+	}()
 
+	// Process lines until done
 	for {
-		// Check for context cancellation first
 		select {
 		case <-pr.ctx.Done():
+			// Context cancelled, close the pipe to unblock the reader
+			if pr.stdout != nil {
+				_ = pr.stdout.Close()
+			}
+			// Wait briefly for reader to finish
+			select {
+			case <-readerDone:
+			case <-time.After(100 * time.Millisecond):
+				// Reader didn't finish in time, but we need to exit
+			}
 			return
-		default:
+			
+		case line, ok := <-lineChan:
+			if !ok {
+				// Channel closed, reader finished
+				return
+			}
+			
+			// Send to WebSocket client
+			if pr.client != nil {
+				pr.client.SendLogMessage(line, "stdout", pr.pid)
+			}
+
+			// Call callback
+			if pr.OnLogLine != nil {
+				pr.OnLogLine(line, "stdout")
+			}
+			
+		case err, ok := <-errChan:
+			if !ok {
+				// Channel closed
+				return
+			}
+			if err != nil && pr.OnError != nil {
+				pr.OnError(fmt.Errorf("stdout read error: %w", err))
+			}
+			// Wait for reader to finish
+			<-readerDone
+			return
 		}
-
-		// Scan for next line
-		if !scanner.Scan() {
-			// EOF or error - exit the loop
-			break
-		}
-
-		line := scanner.Text()
-
-		// Send to WebSocket client
-		if pr.client != nil {
-			pr.client.SendLogMessage(line, "stdout", pr.pid)
-		}
-
-		// Call callback
-		if pr.OnLogLine != nil {
-			pr.OnLogLine(line, "stdout")
-		}
-	}
-
-	if err := scanner.Err(); err != nil && pr.OnError != nil {
-		pr.OnError(fmt.Errorf("stdout scanner error: %w", err))
 	}
 }
 
@@ -335,39 +384,88 @@ func (pr *ProcessRunner) handleStderr() {
 		}
 	}()
 
-	scanner := bufio.NewScanner(pr.stderr)
-	// Set buffer limits as per specification (64KB max line size)
-	scanner.Buffer(make([]byte, 4096), 64*1024)
+	reader := bufio.NewReaderSize(pr.stderr, 64*1024) // 64KB buffer
+	lineChan := make(chan string, 100) // Buffer for performance
+	errChan := make(chan error, 1)
+	
+	// Start a goroutine to read lines
+	readerDone := make(chan struct{})
+	go func() {
+		defer close(readerDone)
+		defer close(lineChan)
+		defer close(errChan)
+		
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				if err != io.EOF {
+					select {
+					case errChan <- err:
+					case <-pr.ctx.Done():
+					}
+				} else if len(line) > 0 {
+					// Handle partial line at EOF
+					select {
+					case lineChan <- strings.TrimRight(line, "\n\r"):
+					case <-pr.ctx.Done():
+					}
+				}
+				return
+			}
+			
+			// Send line without blocking indefinitely
+			select {
+			case lineChan <- strings.TrimRight(line, "\n\r"):
+			case <-pr.ctx.Done():
+				return
+			}
+		}
+	}()
 
+	// Process lines until done
 	for {
-		// Check for context cancellation first
 		select {
 		case <-pr.ctx.Done():
+			// Context cancelled, close the pipe to unblock the reader
+			if pr.stderr != nil {
+				_ = pr.stderr.Close()
+			}
+			// Wait briefly for reader to finish
+			select {
+			case <-readerDone:
+			case <-time.After(100 * time.Millisecond):
+				// Reader didn't finish in time, but we need to exit
+			}
 			return
-		default:
+			
+		case line, ok := <-lineChan:
+			if !ok {
+				// Channel closed, reader finished
+				return
+			}
+			
+			// Send to WebSocket client
+			if pr.client != nil {
+				pr.client.SendLogMessage(line, "stderr", pr.pid)
+			}
+
+			// Call callback
+			if pr.OnLogLine != nil {
+				pr.OnLogLine(line, "stderr")
+			}
+			
+		case err, ok := <-errChan:
+			if !ok {
+				// Channel closed
+				return
+			}
+			if err != nil && pr.OnError != nil {
+				pr.OnError(fmt.Errorf("stderr read error: %w", err))
+			}
+			// Wait for reader to finish
+			<-readerDone
+			return
 		}
-
-		// Scan for next line
-		if !scanner.Scan() {
-			// EOF or error - exit the loop
-			break
-		}
-
-		line := scanner.Text()
-
-		// Send to WebSocket client
-		if pr.client != nil {
-			pr.client.SendLogMessage(line, "stderr", pr.pid)
-		}
-
-		// Call callback
-		if pr.OnLogLine != nil {
-			pr.OnLogLine(line, "stderr")
-		}
-	}
-
-	if err := scanner.Err(); err != nil && pr.OnError != nil {
-		pr.OnError(fmt.Errorf("stderr scanner error: %w", err))
 	}
 }
 

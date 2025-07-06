@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -258,4 +259,9 @@ func simulateHighThroughput(t *testing.T, client *TestClient, messageCount int) 
 	}
 
 	return nil
+}
+
+// countGoroutines returns the current number of goroutines
+func countGoroutines() int {
+	return runtime.NumGoroutine()
 }
