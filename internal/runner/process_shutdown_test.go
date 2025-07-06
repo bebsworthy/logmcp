@@ -73,6 +73,37 @@ func TestProcessRunner_NoTimeoutWarning(t *testing.T) {
 	}
 }
 
+// TestProcessRunner_VeryLongRunning tests that processes can run for more than 30 seconds
+// without triggering the timeout warning
+func TestProcessRunner_VeryLongRunning(t *testing.T) {
+	runner := NewProcessRunner("sleep 40", "test-long-running")
+
+	// Start the process
+	if err := runner.Start(); err != nil {
+		t.Fatalf("Failed to start process: %v", err)
+	}
+
+	// Run for 35 seconds (past the old 30 second timeout)
+	time.Sleep(35 * time.Second)
+
+	// Verify it's still running
+	if !runner.IsRunning() {
+		t.Fatal("Expected process to still be running after 35 seconds")
+	}
+
+	// Stop the process
+	if err := runner.Stop(); err != nil {
+		t.Errorf("Failed to stop process: %v", err)
+	}
+
+	// Wait should complete without timeout warning
+	if err := runner.Wait(); err != nil {
+		t.Errorf("Wait returned error: %v", err)
+	}
+
+	t.Log("Successfully ran process for 35+ seconds without timeout warning")
+}
+
 // TestProcessRunner_CleanShutdownWithOutput tests processes that produce output
 func TestProcessRunner_CleanShutdownWithOutput(t *testing.T) {
 	runner := NewProcessRunner("go run ../e2e/test_helpers/simple_app.go 100ms", "test-output")

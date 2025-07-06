@@ -25,48 +25,54 @@ go test -v ./internal/e2e
 go test -v ./internal/e2e -run TestLogMCPServerDebug
 ```
 
+## Next Priority Tests
+
+Based on the current implementation status, the following tests should be prioritized:
+
+### 1. send_stdin_test.go (High Priority)
+Framework support exists but no tests implemented. This is a core feature that needs testing:
+- Basic stdin forwarding to interactive processes
+- Multi-line input handling
+- Binary data support
+- Error cases (non-existent session, process without stdin capability)
+
+### 2. control_process_test.go (High Priority)
+Consolidate scattered control tests into a dedicated file:
+- All signal types (SIGTERM, SIGKILL, SIGINT, SIGHUP, SIGUSR1, SIGUSR2)
+- Process restart with various states
+- Error handling for edge cases
+- Concurrent control operations
+
+### 3. Integration Tests (Medium Priority)
+- WebSocket reconnection and resilience
+- Buffer management limits and eviction
+- Session lifecycle from creation to cleanup
+- Process runner and forwarder modes
+
+### 4. Performance & Security Tests (Lower Priority)
+- Load testing with many sessions/high log volume
+- Security validation for command injection
+- Resource exhaustion handling
+
 ## Test Coverage Requirements
 
-To achieve comprehensive E2E test coverage, the following tests need to be implemented:
-
-### MCP Protocol Tests
-- [ ] **Protocol Handshake** - Full initialize/initialized sequence validation
-- [ ] **Error Handling** - Invalid requests, malformed JSON, protocol violations
-- [ ] **Concurrent Requests** - Multiple simultaneous MCP requests
+The following tests remain to be implemented for comprehensive E2E coverage:
 
 ### Tool-Specific Tests
 
-#### list_sessions
-- [ ] Empty session list
-- [ ] Multiple active sessions with different statuses
-- [ ] Session metadata accuracy (PID, buffer size, log count)
-- [ ] Sessions with duplicate labels
+#### send_stdin (Not Implemented)
+- [ ] Basic stdin forwarding
+- [ ] Multi-line input
+- [ ] Binary data handling
+- [ ] Stdin to non-existent session
+- [ ] Stdin to process without stdin capability
 
-#### get_logs
-- [ ] Basic log retrieval from single session
-- [ ] Multi-session log aggregation
-- [ ] Pattern filtering with regex
-- [ ] Stream filtering (stdout/stderr/both)
-- [ ] Time-based filtering (since parameter)
-- [ ] Line count limiting
-- [ ] Max results limiting across sessions
-- [ ] Non-existent session handling
-
-#### start_process
-- [ ] Basic process startup
-- [ ] Process with custom working directory
-- [ ] Process with environment variables
-- [ ] Process with different restart policies
-- [ ] Long-running process management
-- [ ] Process that exits immediately
-- [ ] Process that crashes
-- [ ] Invalid command handling
-
-#### control_process
-- [ ] Process restart functionality
-- [ ] Signal sending (SIGTERM, SIGKILL, SIGINT, SIGHUP, SIGUSR1, SIGUSR2)
+#### control_process (Needs Dedicated Test File)
+- [ ] Comprehensive signal testing (all 6 signal types)
 - [ ] Control of non-existent session
 - [ ] Control of already stopped process
+- [ ] Rapid successive control commands
+- [ ] Control during process startup/shutdown
 
 #### terminating process
 - [ ] SIGTERM graceful shutdown verification
@@ -85,12 +91,6 @@ To achieve comprehensive E2E test coverage, the following tests need to be imple
 - [ ] Orphaned process detection and cleanup
 - [ ] Recursive termination of nested process trees
 
-#### send_stdin
-- [ ] Basic stdin forwarding
-- [ ] Multi-line input
-- [ ] Binary data handling
-- [ ] Stdin to non-existent session
-- [ ] Stdin to process without stdin capability
 
 ### Integration Tests
 
@@ -149,34 +149,98 @@ To achieve comprehensive E2E test coverage, the following tests need to be imple
 
 ## Current Implementation Status
 
-✅ Basic MCP server initialization and tools/list functionality
-✅ Direct tool invocation (list_sessions)
+### ✅ Fully Implemented
 
-The remaining tests listed above need to be implemented to ensure comprehensive coverage of all LogMCP features and edge cases.
+**Core Infrastructure:**
+- Basic MCP server initialization and tools/list functionality
+- Test framework with dynamic port management (`framework.go`)
+- Test helper applications (simple_app, crash_app, fork_app, stdin_app)
+- Port allocation with conflict prevention for parallel execution
+
+**MCP Protocol Tests (`mcp_protocol_test.go`):**
+- Protocol handshake and initialization validation
+- Error handling for invalid requests and protocol violations
+- Concurrent request handling (up to 50 simultaneous requests)
+- Additional edge cases: large payloads, context cancellation, special characters
+
+**Tool-Specific Tests:**
+- **list_sessions** (`list_sessions_test.go`) - All planned scenarios plus:
+  - Crashed sessions detection
+  - Many sessions (20+) handling
+  - Session type differentiation
+  - Restarted session tracking
+- **get_logs** (`get_logs_test.go`) - All planned scenarios implemented:
+  - Single/multi-session retrieval
+  - Pattern, stream, and time-based filtering
+  - Line and result limiting
+  - Error handling for non-existent sessions
+- **start_process** (`start_process_test.go`) - All planned scenarios plus:
+  - Invalid working directory handling
+  - Duplicate label resolution
+  - Complex command execution
+  - Process tree management
+  - Startup log collection toggle
+
+**Resilience Tests (`resilience_test.go`):**
+- Process crash detection with exit codes
+- High-frequency logging stress tests
+- Long-running process management
+- Multiple concurrent process handling
+
+### ⚠️ Partially Implemented
+
+- **control_process** - Functionality exists but scattered across multiple test files:
+  - SIGTERM in resilience_test.go
+  - SIGKILL in framework_test.go
+  - Restart in list_sessions_test.go
+  - Missing: dedicated test file, all signal types, comprehensive error cases
+
+- **Process tree cleanup** - Basic testing in start_process_test.go but not comprehensive
+
+### ❌ Not Implemented
+
+**Tool-Specific Tests:**
+- **send_stdin** - Framework support exists but no test cases implemented
+- **Comprehensive termination tests** - Only basic signal tests exist
+
+**Integration Tests:**
+- WebSocket communication patterns
+- Buffer management (5MB/5min limits)
+- Session lifecycle and cleanup
+- Process runner mode (`logmcp run`)
+- Log forwarder mode (`logmcp forward`)
+
+**Advanced Tests:**
+- Performance and load tests
+- Security tests (command injection, path traversal)
+- Network interruption recovery
+- Resource exhaustion handling
 
 ## Implementation Strategy
 
-### File Structure Organization
-
-Tests will be organized by category for better maintainability and parallel execution:
+### Current File Structure
 
 ```
 internal/e2e/
-├── framework.go            # Base test framework with common utilities
-├── mcp_protocol_test.go    # MCP protocol-level tests
-├── list_sessions_test.go   # Tests for list_sessions tool
-├── get_logs_test.go        # Tests for get_logs tool
-├── start_process_test.go   # Tests for start_process tool
-├── control_process_test.go # Tests for control_process tool
-├── send_stdin_test.go      # Tests for send_stdin tool
-├── integration_test.go     # WebSocket, buffer, and session lifecycle tests
-├── performance_test.go     # Performance and load tests
-├── resilience_test.go      # Resilience and recovery tests
-└── test_helpers/           # Test applications and utilities
-    ├── simple_app.go       # Simple test application
-    ├── crash_app.go        # App that crashes after startup
-    ├── fork_app.go         # App that creates child processes
-    └── stdin_app.go        # App that reads from stdin
+├── framework.go            # ✅ Base test framework with port management
+├── framework_test.go       # ✅ Framework functionality tests
+├── mcp_protocol_test.go    # ✅ MCP protocol-level tests (comprehensive)
+├── mcp_server_test.go      # ✅ MCP server integration tests
+├── list_sessions_test.go   # ✅ Tests for list_sessions tool (complete)
+├── get_logs_test.go        # ✅ Tests for get_logs tool (complete)
+├── start_process_test.go   # ✅ Tests for start_process tool (complete)
+├── resilience_test.go      # ✅ Basic resilience and recovery tests
+├── debug_test.go           # ✅ Simple debugging tests
+├── control_process_test.go # ❌ Not implemented (tests scattered)
+├── send_stdin_test.go      # ❌ Not implemented
+├── integration_test.go     # ❌ Not implemented
+├── performance_test.go     # ❌ Not implemented
+└── test_helpers/           # ✅ Test applications implemented
+    ├── README.md           # Documentation for test helpers
+    ├── simple_app.go       # ✅ Long-running test app
+    ├── crash_app.go        # ✅ App that crashes with exit code
+    ├── fork_app.go         # ✅ App that creates child processes
+    └── stdin_app.go        # ✅ Interactive app accepting stdin
 ```
 
 ### Base Framework Design with Port Management

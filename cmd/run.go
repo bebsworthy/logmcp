@@ -134,8 +134,12 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Starting process...\n")
 	}
 
+	// Create done channel for stdin forwarding
+	stdinDone := make(chan struct{})
+	defer close(stdinDone)
+
 	// Start stdin forwarding goroutine
-	go forwardStdin(runner)
+	go forwardStdin(runner, stdinDone)
 
 	// Run the process
 	err = runner.RunWithSignalHandling()
@@ -189,23 +193,44 @@ func setupRunnerCallbacks(processRunner *runner.ProcessRunner) {
 }
 
 // forwardStdin reads from stdin and forwards input to the process
-func forwardStdin(processRunner *runner.ProcessRunner) {
-	scanner := bufio.NewScanner(os.Stdin)
-	for scanner.Scan() {
-		line := scanner.Text()
-		// Add newline since scanner strips it
-		if err := processRunner.SendStdin(line + "\n"); err != nil {
-			if verbose {
-				log.Printf("Failed to send stdin: %v", err)
+func forwardStdin(processRunner *runner.ProcessRunner, done <-chan struct{}) {
+	// Create a channel for stdin lines
+	lineChan := make(chan string)
+	
+	// Start a goroutine to read from stdin
+	go func() {
+		scanner := bufio.NewScanner(os.Stdin)
+		for scanner.Scan() {
+			select {
+			case lineChan <- scanner.Text():
+			case <-done:
+				return
 			}
-			// Exit goroutine if we can't send stdin (process likely exited)
-			return
 		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		if verbose {
+		if err := scanner.Err(); err != nil && verbose {
 			log.Printf("Stdin scanner error: %v", err)
+		}
+		close(lineChan)
+	}()
+
+	// Process stdin lines until done
+	for {
+		select {
+		case <-done:
+			return
+		case line, ok := <-lineChan:
+			if !ok {
+				// Stdin closed
+				return
+			}
+			// Add newline since scanner strips it
+			if err := processRunner.SendStdin(line + "\n"); err != nil {
+				if verbose {
+					log.Printf("Failed to send stdin: %v", err)
+				}
+				// Exit goroutine if we can't send stdin (process likely exited)
+				return
+			}
 		}
 	}
 }

@@ -791,26 +791,77 @@ func (pr *ProcessRunner) getCommandString() string {
 	return pr.command + " " + strings.Join(pr.args, " ")
 }
 
+// WaitForProcessCompletion waits for the process to exit without timeout
+func (pr *ProcessRunner) WaitForProcessCompletion() error {
+	if pr.cmd == nil {
+		return nil
+	}
+
+	// Create a channel to signal when the process exits
+	processDone := make(chan struct{})
+	
+	// Monitor the handleProcess goroutine completion
+	go func() {
+		// Wait for the process handler goroutine to finish
+		// This happens when the process exits
+		for {
+			pr.mutex.RLock()
+			running := pr.running
+			pr.mutex.RUnlock()
+			
+			if !running {
+				close(processDone)
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}()
+
+	// Wait for process to exit or context cancellation
+	select {
+	case <-processDone:
+		return nil
+	case <-pr.ctx.Done():
+		return pr.ctx.Err()
+	}
+}
+
 // RunWithSignalHandling runs the process with signal handling for graceful shutdown
 func (pr *ProcessRunner) RunWithSignalHandling() error {
 	// Set up signal handling
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigChan)
 
 	// Start the process
 	if err := pr.Start(); err != nil {
 		return err
 	}
 
-	// Wait for signals or process completion
+	// Handle signals in a goroutine
+	signalReceived := make(chan struct{})
 	go func() {
 		<-sigChan
 		log.Printf("Received shutdown signal, stopping process...")
+		close(signalReceived)
 		pr.Stop()
 	}()
 
-	// Wait for process to complete
-	return pr.Wait()
+	// Wait for process to complete or signal
+	err := pr.WaitForProcessCompletion()
+	
+	// If we got a signal, wait briefly for graceful shutdown
+	select {
+	case <-signalReceived:
+		// Give the process a moment to clean up after Stop()
+		time.Sleep(100 * time.Millisecond)
+	default:
+	}
+	
+	// Now wait for all goroutines to complete (with timeout is OK here)
+	pr.Wait()
+	
+	return err
 }
 
 // Health check methods
